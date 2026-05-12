@@ -1,0 +1,17 @@
+/* Bootstrap 5 layout stub - replace with full Bootstrap CSS in production */
+/* Download: https://getbootstrap.com/docs/5.3/getting-started/download/ */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.container{width:100%;padding-right:15px;padding-left:15px;margin-right:auto;margin-left:auto}
+.row{display:flex;flex-wrap:wrap;margin-right:-15px;margin-left:-15px}
+.col,.col-auto,[class*="col-"]{position:relative;width:100%;padding-right:15px;padding-left:15px}
+@media(min-width:768px){.col-md-6{flex:0 0 50%;max-width:50%}.col-md-4{flex:0 0 33.333%;max-width:33.333%}}
+@media(min-width:992px){.col-lg-3{flex:0 0 25%;max-width:25%}.col-lg-6{flex:0 0 50%;max-width:50%}}
+.d-flex{display:flex}.align-items-center{align-items:center}.justify-content-between{justify-content:space-between}
+.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:1rem}.mt-4{margin-top:1.5rem}
+.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:1rem}.mb-4{margin-bottom:1.5rem}
+.p-3{padding:1rem}.p-4{padding:1.5rem}.text-center{text-align:center}.fw-bold{font-weight:700}
+.btn{display:inline-block;padding:.375rem .75rem;border-radius:.25rem;border:1px solid transparent;cursor:pointer;text-decoration:none}
+.form-control{display:block;width:100%;padding:.375rem .75rem;border:1px solid #ced4da;border-radius:.25rem}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:.5rem;border-bottom:1px solid #dee2e6}
+.alert{padding:.75rem 1.25rem;border-radius:.25rem;margin-bottom:1rem}
