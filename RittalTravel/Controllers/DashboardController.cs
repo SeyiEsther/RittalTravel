@@ -23,57 +23,26 @@ public class DashboardController : Controller
         try
         {
             int currentYear = DateTime.Now.Year;
-
-            var allTrips = await _db.Trips
-                .Where(t => t.OrganisationId == 1)
-                .OrderByDescending(t => t.TripDate)
-                .ToListAsync();
-
+            var allTrips = await _db.Trips.Where(t => t.OrganisationId == 1)
+                .OrderByDescending(t => t.TripDate).ToListAsync();
             var yearTrips = allTrips.Where(t => t.TripDate.Year == currentYear).ToList();
-
-            double totalTco2e = yearTrips.Sum(t => t.KgCO2e) / 1000.0;
-            int totalTrips = yearTrips.Count;
-            int uniqueTravellers = yearTrips.Select(t => t.TravellerName).Distinct().Count();
-
-            string mostTravelledRoute = yearTrips
-                .GroupBy(t => $"{t.Origin} → {t.Destination}")
-                .OrderByDescending(g => g.Count())
-                .Select(g => g.Key)
-                .FirstOrDefault() ?? "N/A";
-
-            double flightTco2e = yearTrips.Where(t => t.TransportMode.StartsWith("Flight")).Sum(t => t.KgCO2e) / 1000.0;
-            double railTco2e   = yearTrips.Where(t => t.TransportMode.StartsWith("Train")).Sum(t => t.KgCO2e) / 1000.0;
-            double roadTco2e   = yearTrips.Where(t => t.TransportMode.StartsWith("Car") || t.TransportMode.StartsWith("Bus") || t.TransportMode.StartsWith("Coach") || t.TransportMode.StartsWith("Taxi")).Sum(t => t.KgCO2e) / 1000.0;
-
-            var top5 = yearTrips
-                .GroupBy(t => t.TravellerName)
-                .Select(g => new TopTraveller
-                {
-                    Name      = g.Key,
-                    Trips     = g.Count(),
-                    TotalKgCO2e = g.Sum(t => t.KgCO2e),
-                    TotalTco2e  = g.Sum(t => t.KgCO2e) / 1000.0
-                })
-                .OrderByDescending(x => x.TotalKgCO2e)
-                .Take(5)
-                .ToList();
-
-            var recent10 = allTrips.Take(10).ToList();
 
             var vm = new DashboardViewModel
             {
-                TotalTco2eThisYear   = totalTco2e,
-                TotalTrips           = totalTrips,
-                UniqueTravellers     = uniqueTravellers,
-                MostTravelledRoute   = mostTravelledRoute,
-                FlightTco2e          = flightTco2e,
-                RailTco2e            = railTco2e,
-                RoadTco2e            = roadTco2e,
-                Top5Travellers       = top5,
-                RecentTrips          = recent10,
-                CurrentYear          = currentYear,
+                TotalTco2eThisYear = yearTrips.Sum(t => t.KgCO2e) / 1000.0,
+                TotalTrips         = yearTrips.Count,
+                UniqueTravellers   = yearTrips.Select(t => t.TravellerName).Distinct().Count(),
+                MostTravelledRoute = yearTrips.GroupBy(t => $"{t.Origin} → {t.Destination}")
+                    .OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault() ?? "N/A",
+                FlightTco2e = yearTrips.Where(t => t.TransportMode.StartsWith("Flight")).Sum(t => t.KgCO2e) / 1000.0,
+                RailTco2e   = yearTrips.Where(t => t.TransportMode.StartsWith("Train")).Sum(t => t.KgCO2e) / 1000.0,
+                RoadTco2e   = yearTrips.Where(t => !t.TransportMode.StartsWith("Flight") && !t.TransportMode.StartsWith("Train")).Sum(t => t.KgCO2e) / 1000.0,
+                Top5Travellers = yearTrips.GroupBy(t => t.TravellerName)
+                    .Select(g => new TopTraveller { Name = g.Key, Trips = g.Count(), TotalKgCO2e = g.Sum(t => t.KgCO2e), TotalTco2e = g.Sum(t => t.KgCO2e) / 1000.0 })
+                    .OrderByDescending(x => x.TotalKgCO2e).Take(5).ToList(),
+                RecentTrips = allTrips.Take(10).ToList(),
+                CurrentYear = currentYear,
             };
-
             return View(vm);
         }
         catch (Exception ex)

@@ -1,10 +1,10 @@
 @model List<RittalTravel.Models.Trip>
 @{
     ViewData["Title"] = "Trip Log";
-    double totalTco2e     = ViewBag.TotalTco2e;
-    int totalTrips        = ViewBag.TotalTrips;
-    int uniqueTravellers  = ViewBag.UniqueTravellers;
-    int currentYear       = ViewBag.CurrentYear;
+    double totalTco2e    = ViewBag.TotalTco2e;
+    int totalTrips       = ViewBag.TotalTrips;
+    int uniqueTravellers = ViewBag.UniqueTravellers;
+    int currentYear      = ViewBag.CurrentYear;
 }
 
 <div class="rt-page-header rt-flex-between">
@@ -12,102 +12,59 @@
         <h1 class="rt-page-title">Business Travel Audit Trail</h1>
         <span class="rt-defra-badge">DEFRA 2025</span>
     </div>
-    @if (User.IsInRole("Admin"))
-    {
-        <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">+ Log Trip</a>
-    }
+    @if (User.IsInRole("Admin")) { <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">+ Log Trip</a> }
 </div>
 
-@if (TempData["Success"] != null)
-{
-    <div class="rt-alert rt-alert-success">@TempData["Success"]</div>
-}
-@if (TempData["Error"] != null)
-{
-    <div class="rt-alert rt-alert-error">@TempData["Error"]</div>
-}
+@if (TempData["Success"] != null) { <div class="rt-alert rt-alert-success">@TempData["Success"]</div> }
+@if (TempData["Error"]   != null) { <div class="rt-alert rt-alert-error">@TempData["Error"]</div> }
 
-<!-- Stat Cards -->
 <div class="rt-stat-grid">
-    <div class="rt-stat-card">
-        <div class="rt-stat-value">@totalTco2e.ToString("F3")</div>
-        <div class="rt-stat-label">tCO2e (@currentYear)</div>
-    </div>
-    <div class="rt-stat-card">
-        <div class="rt-stat-value">@totalTrips</div>
-        <div class="rt-stat-label">Trips (@currentYear)</div>
-    </div>
-    <div class="rt-stat-card">
-        <div class="rt-stat-value">@uniqueTravellers</div>
-        <div class="rt-stat-label">Travellers (@currentYear)</div>
-    </div>
-    <div class="rt-stat-card">
-        <div class="rt-stat-value">@currentYear</div>
-        <div class="rt-stat-label">Current Year</div>
-    </div>
+    <div class="rt-stat-card"><div class="rt-stat-value">@totalTco2e.ToString("F3")</div><div class="rt-stat-label">tCO2e (@currentYear)</div></div>
+    <div class="rt-stat-card"><div class="rt-stat-value">@totalTrips</div><div class="rt-stat-label">Trips (@currentYear)</div></div>
+    <div class="rt-stat-card"><div class="rt-stat-value">@uniqueTravellers</div><div class="rt-stat-label">Travellers (@currentYear)</div></div>
+    <div class="rt-stat-card"><div class="rt-stat-value">@currentYear</div><div class="rt-stat-label">Current Year</div></div>
 </div>
 
 <div class="rt-card">
-    @if (Model.Any())
-    {
-        <div class="rt-table-wrap">
-            <table class="rt-table rt-table--audit">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Traveller</th>
-                        <th>Route</th>
-                        <th>Mode</th>
-                        <th class="rt-text-right">Dist km</th>
-                        <th class="rt-text-right">DEFRA Factor</th>
-                        <th>Formula</th>
-                        <th class="rt-text-right">kgCO2e</th>
-                        <th>Methodology</th>
-                        <th>Purpose</th>
-                        @if (User.IsInRole("Admin"))
-                        {
-                            <th>Actions</th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var trip in Model)
-                    {
-                        <tr>
-                            <td class="rt-mono rt-nowrap">@trip.TripDate.ToString("dd MMM yyyy")</td>
-                            <td>@trip.TravellerName</td>
-                            <td class="rt-nowrap">@trip.Origin &rarr; @trip.Destination</td>
-                            <td><span class="rt-mode-badge rt-mode-@trip.TransportMode.ToLower().Replace("-","").Replace(" ","")">@trip.TransportMode</span></td>
-                            <td class="rt-text-right rt-mono">@trip.DistanceKm.ToString("F1")</td>
-                            <td class="rt-text-right rt-mono">@trip.EmissionFactor.ToString("F5")</td>
-                            <td class="rt-formula">@trip.Formula</td>
-                            <td class="rt-text-right rt-mono">@trip.KgCO2e.ToString("F3")</td>
-                            <td class="rt-small">@trip.DistanceMethodology</td>
-                            <td class="rt-small">@trip.Purpose</td>
-                            @if (User.IsInRole("Admin"))
-                            {
-                                <td>
-                                    <form asp-action="Delete" asp-route-id="@trip.Id" method="post"
-                                          onsubmit="return confirm('Delete trip for @Html.Raw(trip.TravellerName.Replace("'", "\\'")) (@trip.Origin → @trip.Destination)? This cannot be undone.')">
-                                        @Html.AntiForgeryToken()
-                                        <button type="submit" class="rt-btn rt-btn-danger rt-btn-sm">Delete</button>
-                                    </form>
-                                </td>
-                            }
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-    else
-    {
-        <div class="rt-empty-state">
-            <p>No trips have been logged yet.</p>
-            @if (User.IsInRole("Admin"))
-            {
-                <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">Log Your First Trip</a>
-            }
-        </div>
-    }
+@if (Model.Any()) {
+    <div class="rt-table-wrap"><table class="rt-table rt-table--audit">
+        <thead><tr>
+            <th>Date</th><th>Traveller</th><th>Route</th><th>Mode</th>
+            <th class="rt-text-right">Dist km</th><th class="rt-text-right">DEFRA Factor</th>
+            <th>Formula</th><th class="rt-text-right">kgCO2e</th>
+            <th>Methodology</th><th>Purpose</th>
+            @if (User.IsInRole("Admin")) { <th>Actions</th> }
+        </tr></thead>
+        <tbody>
+        @foreach (var trip in Model) {
+            <tr>
+                <td class="rt-mono rt-nowrap">@trip.TripDate.ToString("dd MMM yyyy")</td>
+                <td>@trip.TravellerName</td>
+                <td class="rt-nowrap">@trip.Origin &rarr; @trip.Destination</td>
+                <td><span class="rt-mode-badge rt-mode-@trip.TransportMode.ToLower().Replace("-","").Replace(" ","")">@trip.TransportMode</span></td>
+                <td class="rt-text-right rt-mono">@trip.DistanceKm.ToString("F1")</td>
+                <td class="rt-text-right rt-mono">@trip.EmissionFactor.ToString("F5")</td>
+                <td class="rt-formula">@trip.Formula</td>
+                <td class="rt-text-right rt-mono">@trip.KgCO2e.ToString("F3")</td>
+                <td class="rt-small">@trip.DistanceMethodology</td>
+                <td class="rt-small">@trip.Purpose</td>
+                @if (User.IsInRole("Admin")) {
+                    <td>
+                        <form asp-action="Delete" asp-route-id="@trip.Id" method="post"
+                              onsubmit="return confirm('Delete trip for @Html.Raw(trip.TravellerName.Replace("'","\\'"))? This cannot be undone.')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="rt-btn rt-btn-danger rt-btn-sm">Delete</button>
+                        </form>
+                    </td>
+                }
+            </tr>
+        }
+        </tbody>
+    </table></div>
+} else {
+    <div class="rt-empty-state">
+        <p>No trips have been logged yet.</p>
+        @if (User.IsInRole("Admin")) { <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">Log Your First Trip</a> }
+    </div>
+}
 </div>

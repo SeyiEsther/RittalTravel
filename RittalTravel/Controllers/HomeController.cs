@@ -8,12 +8,8 @@ public class HomeController : Controller
     {
         if (User.Identity?.IsAuthenticated == true)
             return RedirectToAction("Index", "Dashboard");
-
         return RedirectToAction("Login", "Account");
     }
 
-    public IActionResult Error()
-    {
-        return View();
-    }
+    public IActionResult Error() => View();
 }

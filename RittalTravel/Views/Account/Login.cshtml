@@ -20,17 +20,13 @@
                 </div>
                 <p class="rt-login-subtitle">Business Travel Carbon Reporting</p>
             </div>
-
             @if (!ViewData.ModelState.IsValid)
             {
                 <div class="rt-alert rt-alert-error">
                     @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-                    {
-                        <div>@error.ErrorMessage</div>
-                    }
+                    { <div>@error.ErrorMessage</div> }
                 </div>
             }
-
             <form method="post" asp-controller="Account" asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]">
                 @Html.AntiForgeryToken()
                 <div class="rt-field">
@@ -43,7 +39,6 @@
                 </div>
                 <button type="submit" class="rt-btn rt-btn-red rt-btn-full">Sign In</button>
             </form>
-
             <div class="rt-login-footer">
                 DEFRA 2025 &mdash; GHG Protocol &mdash; Audit Ready &mdash; Rittal UK Internal System
             </div>

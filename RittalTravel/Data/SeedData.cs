@@ -9,10 +9,8 @@ public static class SeedData
     {
         var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-        var db = services.GetRequiredService<RittalTravelContext>();
         var logger = services.GetRequiredService<ILogger<RittalTravelContext>>();
 
-        // Seed roles
         foreach (var role in new[] { "Admin", "Viewer" })
         {
             if (!await roleManager.RoleExistsAsync(role))
@@ -22,18 +20,15 @@ public static class SeedData
             }
         }
 
-        // Seed admin
         await SeedUser(userManager, logger,
             email: "admin@rittal.co.uk",
             password: "RittalTravel2025!",
             role: "Admin");
 
-        // Seed viewer
         await SeedUser(userManager, logger,
             email: "viewer@rittal.co.uk",
             password: "ViewOnly2025!",
             role: "Viewer");
-
     }
 
     private static async Task SeedUser(UserManager<IdentityUser> um, ILogger logger,
@@ -54,6 +49,4 @@ public static class SeedData
                 logger.LogError("Failed to create {Email}: {Code} - {Desc}", email, e.Code, e.Description);
         }
     }
-
-
 }

@@ -20,7 +20,6 @@ public class AccountController : Controller
     {
         if (User.Identity?.IsAuthenticated == true)
             return RedirectToAction("Index", "Dashboard");
-
         ViewData["ReturnUrl"] = returnUrl;
         return View();
     }
@@ -34,9 +33,7 @@ public class AccountController : Controller
             ModelState.AddModelError("", "Email and password are required.");
             return View();
         }
-
         var result = await _signIn.PasswordSignInAsync(email, password, isPersistent: false, lockoutOnFailure: false);
-
         if (result.Succeeded)
         {
             _logger.LogInformation("User {Email} logged in", email);
@@ -44,7 +41,6 @@ public class AccountController : Controller
                 return Redirect(returnUrl);
             return RedirectToAction("Index", "Dashboard");
         }
-
         _logger.LogWarning("Failed login attempt for {Email}", email);
         ModelState.AddModelError("", "Invalid email or password.");
         return View();
