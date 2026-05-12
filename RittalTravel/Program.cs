@@ -11,15 +11,11 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("DefaultConnection not found.");
 
-builder.Services.AddControllersWithViews()
-    .AddNewtonsoftJson();
+builder.Services.AddControllersWithViews().AddNewtonsoftJson();
 
 builder.Services.AddDbContext<RittalTravelContext>(options =>
     options.UseSqlServer(connectionString,
-        sql => sql.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorNumbersToAdd: null)));
+        sql => sql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null)));
 
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
 {
@@ -42,8 +38,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
 });
 
-builder.Services.AddHttpClient<GoogleMapsService>(c =>
-    c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient<GoogleMapsService>(c => c.Timeout = TimeSpan.FromSeconds(15));
 
 builder.Services.AddSession(options =>
 {
@@ -70,15 +65,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseSession();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}");
 
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var logger = services.GetRequiredService<ILogger<Program>>();
-
     try
     {
         var db = services.GetRequiredService<RittalTravelContext>();
@@ -90,7 +82,6 @@ using (var scope = app.Services.CreateScope())
         logger.LogCritical(ex, "Database migration failed. Application cannot start.");
         throw;
     }
-
     try
     {
         await SeedData.InitialiseAsync(services);

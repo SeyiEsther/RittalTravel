@@ -26,11 +26,8 @@ public class RittalTravelContext : IdentityDbContext<IdentityUser>
             .WithMany()
             .HasForeignKey(t => t.OrganisationId);
 
-        modelBuilder.Entity<Trip>()
-            .Property(t => t.TravellerName).HasMaxLength(100);
-        modelBuilder.Entity<Trip>()
-            .Property(t => t.TransportMode).HasMaxLength(50);
-        modelBuilder.Entity<Trip>()
-            .Property(t => t.TravelClass).HasMaxLength(20);
+        modelBuilder.Entity<Trip>().Property(t => t.TravellerName).HasMaxLength(100);
+        modelBuilder.Entity<Trip>().Property(t => t.TransportMode).HasMaxLength(50);
+        modelBuilder.Entity<Trip>().Property(t => t.TravelClass).HasMaxLength(20);
     }
 }

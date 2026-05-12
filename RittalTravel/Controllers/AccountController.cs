@@ -11,15 +11,13 @@ public class AccountController : Controller
 
     public AccountController(SignInManager<IdentityUser> signIn, ILogger<AccountController> logger)
     {
-        _signIn = signIn;
-        _logger = logger;
+        _signIn = signIn; _logger = logger;
     }
 
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
     {
-        if (User.Identity?.IsAuthenticated == true)
-            return RedirectToAction("Index", "Dashboard");
+        if (User.Identity?.IsAuthenticated == true) return RedirectToAction("Index", "Dashboard");
         ViewData["ReturnUrl"] = returnUrl;
         return View();
     }
@@ -37,8 +35,7 @@ public class AccountController : Controller
         if (result.Succeeded)
         {
             _logger.LogInformation("User {Email} logged in", email);
-            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                return Redirect(returnUrl);
+            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)) return Redirect(returnUrl);
             return RedirectToAction("Index", "Dashboard");
         }
         _logger.LogWarning("Failed login attempt for {Email}", email);
@@ -52,7 +49,6 @@ public class AccountController : Controller
     public async Task<IActionResult> Logout()
     {
         await _signIn.SignOutAsync();
-        _logger.LogInformation("User logged out");
         return RedirectToAction("Login");
     }
 

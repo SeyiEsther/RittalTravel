@@ -62,8 +62,7 @@ public class TripController : Controller
             nameof(Trip.OrganisationId), nameof(Trip.Organisation), nameof(Trip.CreatedAt), nameof(Trip.LoggedBy), nameof(Trip.Id) })
             ModelState.Remove(f);
 
-        if (!ModelState.IsValid)
-            return View(trip);
+        if (!ModelState.IsValid) return View(trip);
 
         var legs = waypoints?.Where(w => !string.IsNullOrWhiteSpace(w.Location)).ToList();
 
@@ -78,19 +77,13 @@ public class TripController : Controller
                 var locs = new List<string> { trip.Origin };
                 locs.AddRange(legs.Select(w => w.Location!));
                 locs.Add(trip.Destination);
-
                 var modes   = legs.Select(w => w.Mode        ?? trip.TransportMode).Append(trip.TransportMode).ToList();
                 var classes = legs.Select(w => w.TravelClass ?? trip.TravelClass).Append(trip.TravelClass).ToList();
-
                 for (int i = 0; i < locs.Count - 1; i++)
                 {
-                    double legDist = await _maps.GetDistanceKm(locs[i], locs[i + 1], modes[i]);
+                    double legDist   = await _maps.GetDistanceKm(locs[i], locs[i + 1], modes[i]);
                     double legFactor = DefraCalculator.GetEmissionFactor(modes[i], classes[i]);
-                    if (legFactor == 0 || legDist <= 0)
-                    {
-                        ModelState.AddModelError("", $"Could not calculate leg {locs[i]} → {locs[i + 1]}.");
-                        return View(trip);
-                    }
+                    if (legFactor == 0 || legDist <= 0) { ModelState.AddModelError("", $"Could not calculate leg {locs[i]} to {locs[i + 1]}."); return View(trip); }
                     double legKg = DefraCalculator.CalculateKgCO2e(legDist, legFactor, trip.Passengers);
                     totalDist += legDist; totalKg += legKg;
                     formulaParts.Add($"Leg {i + 1} ({modes[i]}): {DefraCalculator.GetFormula(modes[i], classes[i], legDist, legFactor, trip.Passengers, legKg)}");
@@ -102,11 +95,7 @@ public class TripController : Controller
             {
                 double dist   = await _maps.GetDistanceKm(trip.Origin, trip.Destination, trip.TransportMode);
                 double factor = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
-                if (factor == 0 || dist <= 0)
-                {
-                    ModelState.AddModelError("", "Could not calculate distance. Check origin, destination and mode.");
-                    return View(trip);
-                }
+                if (factor == 0 || dist <= 0) { ModelState.AddModelError("", "Could not calculate distance. Check origin, destination and mode."); return View(trip); }
                 double kg = DefraCalculator.CalculateKgCO2e(dist, factor, trip.Passengers);
                 totalDist = dist; totalKg = kg;
                 formulaParts.Add(DefraCalculator.GetFormula(trip.TransportMode, trip.TravelClass, dist, factor, trip.Passengers, kg));
@@ -136,20 +125,12 @@ public class TripController : Controller
 
             _db.Trips.Add(trip);
             await _db.SaveChangesAsync();
-            _logger.LogInformation("Trip logged: {Name} {O} → {D} {Kg:F3} kgCO2e",
-                trip.TravellerName, trip.Origin, trip.Destination, trip.KgCO2e);
-            TempData["Success"] = $"Trip logged: {trip.TravellerName} — {trip.Origin} → {trip.Destination} — {trip.KgCO2e:F3} kgCO2e";
+            TempData["Success"] = $"Trip logged: {trip.TravellerName} - {trip.Origin} to {trip.Destination} - {trip.KgCO2e:F3} kgCO2e";
             return RedirectToAction(nameof(Index));
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Google Maps HTTP error");
-            ModelState.AddModelError("", "Could not reach Google Maps API.");
-            return View(trip);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error logging trip");
+            _logger.LogError(ex, "Error logging trip");
             ModelState.AddModelError("", "An unexpected error occurred. Please try again.");
             return View(trip);
         }
@@ -166,7 +147,6 @@ public class TripController : Controller
             if (trip == null) { TempData["Error"] = "Trip not found."; return RedirectToAction(nameof(Index)); }
             _db.Trips.Remove(trip);
             await _db.SaveChangesAsync();
-            _logger.LogInformation("Trip {Id} deleted by {User}", id, User.Identity?.Name);
             TempData["Success"] = $"Trip for {trip.TravellerName} deleted.";
         }
         catch (Exception ex)

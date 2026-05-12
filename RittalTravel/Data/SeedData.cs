@@ -20,22 +20,14 @@ public static class SeedData
             }
         }
 
-        await SeedUser(userManager, logger,
-            email: "admin@rittal.co.uk",
-            password: "RittalTravel2025!",
-            role: "Admin");
-
-        await SeedUser(userManager, logger,
-            email: "viewer@rittal.co.uk",
-            password: "ViewOnly2025!",
-            role: "Viewer");
+        await SeedUser(userManager, logger, email: "admin@rittal.co.uk", password: "RittalTravel2025!", role: "Admin");
+        await SeedUser(userManager, logger, email: "viewer@rittal.co.uk", password: "ViewOnly2025!", role: "Viewer");
     }
 
     private static async Task SeedUser(UserManager<IdentityUser> um, ILogger logger,
         string email, string password, string role)
     {
         if (await um.FindByEmailAsync(email) != null) return;
-
         var user = new IdentityUser { UserName = email, Email = email, EmailConfirmed = true };
         var result = await um.CreateAsync(user, password);
         if (result.Succeeded)
