@@ -33,9 +33,12 @@ public class GoogleMapsService
             return await GetFlightDistanceKm(origin, destination);
         }
         string travelMode = mode.StartsWith("Train", StringComparison.OrdinalIgnoreCase) ? "transit" : "driving";
+        string trafficParams = travelMode == "driving"
+            ? $"&departure_time={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}&traffic_model=best_guess"
+            : "";
         string url = $"https://maps.googleapis.com/maps/api/distancematrix/json"
                    + $"?origins={Uri.EscapeDataString(origin)}&destinations={Uri.EscapeDataString(destination)}"
-                   + $"&mode={travelMode}&key={_apiKey}";
+                   + $"&mode={travelMode}{trafficParams}&key={_apiKey}";
         try
         {
             var response = await _http.GetAsync(url);

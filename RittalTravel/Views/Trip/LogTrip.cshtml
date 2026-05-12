@@ -1,7 +1,9 @@
 @model RittalTravel.Models.Trip
+@inject Microsoft.Extensions.Configuration.IConfiguration _cfg
 @{
     ViewData["Title"] = "Log Trip";
     Layout = null;
+    var mapsKey = _cfg["GoogleMaps:ApiKey"] ?? "";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -14,9 +16,12 @@
     <link rel="stylesheet" href="~/css/logtrip.css" asp-append-version="true" />
 </head>
 <body class="lt-body">
+
 <nav class="rt-nav">
     <div class="rt-nav-inner">
-        <a class="rt-wordmark" asp-controller="Dashboard" asp-action="Index"><span class="rt-word-rittal">Rittal</span><span class="rt-word-travel">Travel</span></a>
+        <a class="rt-wordmark" asp-controller="Dashboard" asp-action="Index">
+            <span class="rt-word-rittal">Rittal</span><span class="rt-word-travel">Travel</span>
+        </a>
         <ul class="rt-nav-links">
             <li><a asp-controller="Dashboard" asp-action="Index">Dashboard</a></li>
             <li><a asp-controller="Trip" asp-action="Index">Trip Log</a></li>
@@ -32,10 +37,11 @@
         </div>
     </div>
 </nav>
+
 <div class="lt-wrap">
     <div class="lt-header">
         <h1>Log Business Trip</h1>
-        <p>All calculations are performed server-side using DEFRA 2025 factors</p>
+        <p>DEFRA 2025 &middot; GHG Protocol Scope 3 Category 6 &middot; All calculations performed server-side</p>
     </div>
 
     @if (!ViewData.ModelState.IsValid) {
@@ -46,173 +52,364 @@
         </div>
     }
 
-    <form asp-action="LogTrip" method="post">
-        @Html.AntiForgeryToken()
+    <div class="lt-layout">
+        <!-- FORM COLUMN -->
+        <div class="lt-form-col">
+            <form asp-action="LogTrip" method="post" id="lt-form">
+                @Html.AntiForgeryToken()
 
-        <div class="lt-section">
-            <h2 class="lt-section-title">Traveller Details</h2>
-            <div class="lt-grid-2">
-                <div class="lt-field">
-                    <label asp-for="TravellerName">Traveller Full Name <span class="lt-req">*</span></label>
-                    <input asp-for="TravellerName" class="lt-input" placeholder="e.g. Ali Hassan" required />
-                    <span asp-validation-for="TravellerName" class="lt-val-error"></span>
+                <!-- Traveller -->
+                <div class="lt-section">
+                    <h2 class="lt-section-title">Traveller Details</h2>
+                    <div class="lt-grid-2">
+                        <div class="lt-field">
+                            <label asp-for="TravellerName">Traveller Full Name <span class="lt-req">*</span></label>
+                            <input asp-for="TravellerName" class="lt-input" placeholder="e.g. Ali Hassan" required />
+                            <span asp-validation-for="TravellerName" class="lt-val-error"></span>
+                        </div>
+                        <div class="lt-field">
+                            <label asp-for="Purpose">Purpose of Trip</label>
+                            <input asp-for="Purpose" class="lt-input" placeholder="e.g. Client meeting, Conference" />
+                        </div>
+                    </div>
                 </div>
-                <div class="lt-field">
-                    <label asp-for="Purpose">Purpose of Trip</label>
-                    <input asp-for="Purpose" class="lt-input" placeholder="e.g. Client meeting, Conference" />
-                </div>
-            </div>
-        </div>
 
-        <div class="lt-section">
-            <h2 class="lt-section-title">Journey</h2>
-            <div class="lt-field">
-                <label asp-for="Origin">Origin <span class="lt-req">*</span></label>
-                <input asp-for="Origin" class="lt-input" placeholder="e.g. London, UK" required autocomplete="off" />
-            </div>
+                <!-- Journey -->
+                <div class="lt-section">
+                    <h2 class="lt-section-title">Journey</h2>
+                    <div class="lt-field">
+                        <label asp-for="Origin">Origin <span class="lt-req">*</span></label>
+                        <input asp-for="Origin" id="Origin" class="lt-input" placeholder="e.g. London, UK" required autocomplete="off" />
+                    </div>
 
-            <div class="lt-stopovers">
-                <h3 class="lt-stopover-heading">Stopovers <span class="lt-optional">(optional — fill any you need, leave others blank)</span></h3>
-                @for (int i = 0; i < 3; i++) {
-                    <div class="lt-stopover-row">
-                        <span class="lt-stopover-num">@(i + 1)</span>
-                        <div class="lt-stopover-fields">
-                            <div class="lt-field lt-field--grow">
-                                <label>Location</label>
-                                <input type="text" name="waypoints[@i].Location" class="lt-input" placeholder="City / location" autocomplete="off" />
+                    <div class="lt-stopovers">
+                        <h3 class="lt-stopover-heading">Stopovers <span class="lt-optional">(optional — fill any you need, leave others blank)</span></h3>
+                        @for (int i = 0; i < 3; i++) {
+                            <div class="lt-stopover-row">
+                                <span class="lt-stopover-num">@(i + 1)</span>
+                                <div class="lt-stopover-fields">
+                                    <div class="lt-field lt-field--grow">
+                                        <label>Location</label>
+                                        <input type="text" name="waypoints[@i].Location" class="lt-input lt-waypoint-loc" placeholder="City / location" autocomplete="off" />
+                                    </div>
+                                    <div class="lt-field">
+                                        <label>Mode</label>
+                                        <select name="waypoints[@i].Mode" class="lt-select">
+                                            <option value="Flight-Domestic">Flight - Domestic</option>
+                                            <option value="Flight-ShortHaul">Flight - Short Haul</option>
+                                            <option value="Flight-LongHaul">Flight - Long Haul</option>
+                                            <option value="Train-National" selected>Train - National</option>
+                                            <option value="Train-International">Train - International</option>
+                                            <option value="Car-Diesel">Car - Diesel</option>
+                                            <option value="Car-Petrol">Car - Petrol</option>
+                                            <option value="Car-Electric">Car - Electric</option>
+                                            <option value="Car-Hybrid">Car - Hybrid</option>
+                                            <option value="Bus-Local">Bus - Local</option>
+                                            <option value="Coach-National">Coach - National</option>
+                                            <option value="Taxi-Regular">Taxi - Regular</option>
+                                            <option value="Taxi-Electric">Taxi - Electric</option>
+                                            <option value="Ferry-Foot">Ferry - Foot</option>
+                                        </select>
+                                    </div>
+                                    <div class="lt-field">
+                                        <label>Class</label>
+                                        <select name="waypoints[@i].TravelClass" class="lt-select">
+                                            <option value="Economy">Economy</option>
+                                            <option value="Business">Business</option>
+                                            <option value="First">First</option>
+                                            <option value="Standard">Standard</option>
+                                            <option value="Premium">Premium</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="lt-field">
-                                <label>Mode</label>
-                                <select name="waypoints[@i].Mode" class="lt-select">
+                        }
+                    </div>
+
+                    <div class="lt-field lt-mt">
+                        <label asp-for="Destination">Destination <span class="lt-req">*</span></label>
+                        <input asp-for="Destination" id="Destination" class="lt-input" placeholder="e.g. Frankfurt, Germany" required autocomplete="off" />
+                    </div>
+                </div>
+
+                <!-- Trip Details -->
+                <div class="lt-section">
+                    <h2 class="lt-section-title">Trip Details</h2>
+                    <div class="lt-grid-2">
+                        <div class="lt-field">
+                            <label asp-for="TransportMode">Transport Mode <span class="lt-req">*</span></label>
+                            <select asp-for="TransportMode" id="TransportMode" class="lt-select" required>
+                                <option value="">-- Select Mode --</option>
+                                <optgroup label="Flights">
                                     <option value="Flight-Domestic">Flight - Domestic</option>
                                     <option value="Flight-ShortHaul">Flight - Short Haul</option>
                                     <option value="Flight-LongHaul">Flight - Long Haul</option>
-                                    <option value="Train-National" selected>Train - National</option>
+                                </optgroup>
+                                <optgroup label="Rail">
+                                    <option value="Train-National">Train - National</option>
                                     <option value="Train-International">Train - International</option>
+                                    <option value="Train-Underground">Train - Underground/Metro</option>
+                                </optgroup>
+                                <optgroup label="Car">
                                     <option value="Car-Diesel">Car - Diesel</option>
                                     <option value="Car-Petrol">Car - Petrol</option>
                                     <option value="Car-Electric">Car - Electric</option>
                                     <option value="Car-Hybrid">Car - Hybrid</option>
+                                </optgroup>
+                                <optgroup label="Bus / Coach">
                                     <option value="Bus-Local">Bus - Local</option>
                                     <option value="Coach-National">Coach - National</option>
+                                </optgroup>
+                                <optgroup label="Taxi">
                                     <option value="Taxi-Regular">Taxi - Regular</option>
                                     <option value="Taxi-Electric">Taxi - Electric</option>
-                                    <option value="Ferry-Foot">Ferry - Foot</option>
-                                </select>
+                                </optgroup>
+                                <optgroup label="Ferry">
+                                    <option value="Ferry-Foot">Ferry - Foot Passenger</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="lt-field">
+                            <label asp-for="TravelClass">Travel Class</label>
+                            <select asp-for="TravelClass" id="TravelClass" class="lt-select">
+                                <option value="Economy">Economy</option>
+                                <option value="Business">Business</option>
+                                <option value="First">First</option>
+                                <option value="Standard">Standard</option>
+                                <option value="Premium">Premium</option>
+                            </select>
+                        </div>
+                        <div class="lt-field">
+                            <label asp-for="TripDate">Trip Date <span class="lt-req">*</span></label>
+                            <input asp-for="TripDate" type="date" class="lt-input" required />
+                        </div>
+                        <div class="lt-field">
+                            <label asp-for="Passengers">Passengers <span class="lt-req">*</span></label>
+                            <input asp-for="Passengers" id="Passengers" type="number" min="1" max="500" class="lt-input" required />
+                        </div>
+                    </div>
+                    <div class="lt-field lt-mt">
+                        <label asp-for="Notes">Notes</label>
+                        <textarea asp-for="Notes" class="lt-textarea" rows="2" placeholder="Optional notes"></textarea>
+                    </div>
+                </div>
+
+                <!-- Return Trip -->
+                <div class="lt-section">
+                    <h2 class="lt-section-title">Return Trip <span class="lt-optional">(optional)</span></h2>
+                    <div class="lt-field">
+                        <label class="lt-checkbox-label">
+                            <input type="checkbox" id="chk-return" name="returnTrip" value="true" class="lt-checkbox" />
+                            <span>Include return leg in this record</span>
+                        </label>
+                    </div>
+                    <div id="return-extra" style="display:none">
+                        <div class="lt-field">
+                            <label class="lt-checkbox-label">
+                                <input type="checkbox" id="chk-diffreturn" name="differentReturn" value="true" class="lt-checkbox" />
+                                <span>Return route differs from outbound</span>
+                            </label>
+                        </div>
+                        <div id="return-different-fields" class="lt-grid-2 lt-mt" style="display:none">
+                            <div class="lt-field">
+                                <label>Return Origin <span class="lt-optional">(if different)</span></label>
+                                <input type="text" id="returnOrigin" name="returnOrigin" class="lt-input" placeholder="Leave blank to reverse outbound" autocomplete="off" />
                             </div>
                             <div class="lt-field">
-                                <label>Class</label>
-                                <select name="waypoints[@i].TravelClass" class="lt-select">
-                                    <option value="Economy">Economy</option>
-                                    <option value="Business">Business</option>
-                                    <option value="First">First</option>
-                                    <option value="Standard">Standard</option>
-                                    <option value="Premium">Premium</option>
-                                </select>
+                                <label>Return Destination <span class="lt-optional">(if different)</span></label>
+                                <input type="text" id="returnDestination" name="returnDestination" class="lt-input" placeholder="Leave blank to reverse outbound" autocomplete="off" />
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <div class="lt-actions">
+                    <a asp-controller="Trip" asp-action="Index" class="lt-btn-cancel">Cancel</a>
+                    <button type="submit" class="lt-btn-submit">Calculate &amp; Save Trip</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="lt-aside">
+            <div class="lt-preview" id="lt-preview" style="display:none">
+                <div class="lt-preview-head">Live Estimate</div>
+                <div class="lt-preview-body">
+                    <div class="lt-preview-route" id="pv-route"></div>
+                    <div class="lt-preview-co2">
+                        <span class="lt-preview-co2-val" id="pv-kg">—</span>
+                        <span class="lt-preview-co2-label">kgCO&#x2082;e (estimate)</span>
+                    </div>
+                    <div class="lt-preview-rows">
+                        <div class="lt-preview-row"><span class="lt-preview-key">Distance</span><span class="lt-preview-val" id="pv-dist">—</span></div>
+                        <div class="lt-preview-row"><span class="lt-preview-key">Mode</span><span class="lt-preview-val" id="pv-mode">—</span></div>
+                        <div class="lt-preview-row"><span class="lt-preview-key">DEFRA Factor</span><span class="lt-preview-val" id="pv-factor">—</span></div>
+                        <div class="lt-preview-row"><span class="lt-preview-key">Passengers</span><span class="lt-preview-val" id="pv-pax">1</span></div>
+                        <div class="lt-preview-row"><span class="lt-preview-key">tCO&#x2082;e</span><span class="lt-preview-val" id="pv-t">—</span></div>
+                    </div>
+                    <div class="lt-preview-note">Haversine estimate &mdash; server calculates exact route distance</div>
+                </div>
+            </div>
+            <div class="lt-map-box">
+                @if (!string.IsNullOrEmpty(mapsKey)) {
+                    <div id="lt-map"></div>
+                } else {
+                    <div class="lt-map-placeholder">Map available once Google Maps API key is configured in appsettings.json</div>
                 }
             </div>
-
-            <div class="lt-field lt-mt">
-                <label asp-for="Destination">Destination <span class="lt-req">*</span></label>
-                <input asp-for="Destination" class="lt-input" placeholder="e.g. Frankfurt, Germany" required autocomplete="off" />
-            </div>
-        </div>
-
-        <div class="lt-section">
-            <h2 class="lt-section-title">Trip Details</h2>
-            <div class="lt-grid-2">
-                <div class="lt-field">
-                    <label asp-for="TransportMode">Transport Mode <span class="lt-req">*</span></label>
-                    <select asp-for="TransportMode" class="lt-select" required>
-                        <option value="">-- Select Mode --</option>
-                        <optgroup label="Flights">
-                            <option value="Flight-Domestic">Flight - Domestic</option>
-                            <option value="Flight-ShortHaul">Flight - Short Haul</option>
-                            <option value="Flight-LongHaul">Flight - Long Haul</option>
-                        </optgroup>
-                        <optgroup label="Rail">
-                            <option value="Train-National">Train - National</option>
-                            <option value="Train-International">Train - International</option>
-                            <option value="Train-Underground">Train - Underground/Metro</option>
-                        </optgroup>
-                        <optgroup label="Car">
-                            <option value="Car-Diesel">Car - Diesel</option>
-                            <option value="Car-Petrol">Car - Petrol</option>
-                            <option value="Car-Electric">Car - Electric</option>
-                            <option value="Car-Hybrid">Car - Hybrid</option>
-                        </optgroup>
-                        <optgroup label="Bus / Coach">
-                            <option value="Bus-Local">Bus - Local</option>
-                            <option value="Coach-National">Coach - National</option>
-                        </optgroup>
-                        <optgroup label="Taxi">
-                            <option value="Taxi-Regular">Taxi - Regular</option>
-                            <option value="Taxi-Electric">Taxi - Electric</option>
-                        </optgroup>
-                        <optgroup label="Ferry">
-                            <option value="Ferry-Foot">Ferry - Foot Passenger</option>
-                        </optgroup>
-                    </select>
-                </div>
-                <div class="lt-field">
-                    <label asp-for="TravelClass">Travel Class</label>
-                    <select asp-for="TravelClass" class="lt-select">
-                        <option value="Economy">Economy</option>
-                        <option value="Business">Business</option>
-                        <option value="First">First</option>
-                        <option value="Standard">Standard</option>
-                        <option value="Premium">Premium</option>
-                    </select>
-                </div>
-                <div class="lt-field">
-                    <label asp-for="TripDate">Trip Date <span class="lt-req">*</span></label>
-                    <input asp-for="TripDate" type="date" class="lt-input" required />
-                </div>
-                <div class="lt-field">
-                    <label asp-for="Passengers">Passengers <span class="lt-req">*</span></label>
-                    <input asp-for="Passengers" type="number" min="1" max="500" class="lt-input" required />
-                </div>
-            </div>
-            <div class="lt-field lt-mt">
-                <label asp-for="Notes">Notes</label>
-                <textarea asp-for="Notes" class="lt-textarea" rows="2" placeholder="Optional notes"></textarea>
-            </div>
-        </div>
-
-        <div class="lt-section">
-            <h2 class="lt-section-title">Return Trip <span class="lt-optional">(optional)</span></h2>
-            <div class="lt-field">
-                <label class="lt-checkbox-label">
-                    <input type="checkbox" name="returnTrip" value="true" class="lt-checkbox" />
-                    <span>Include return leg in this record</span>
-                </label>
-            </div>
-            <div class="lt-field">
-                <label class="lt-checkbox-label">
-                    <input type="checkbox" name="differentReturn" value="true" class="lt-checkbox" />
-                    <span>Return route differs from outbound</span>
-                </label>
-            </div>
-            <div class="lt-grid-2 lt-mt">
-                <div class="lt-field">
-                    <label>Return Origin <span class="lt-optional">(if different)</span></label>
-                    <input type="text" name="returnOrigin" class="lt-input" placeholder="Leave blank to reverse outbound" autocomplete="off" />
-                </div>
-                <div class="lt-field">
-                    <label>Return Destination <span class="lt-optional">(if different)</span></label>
-                    <input type="text" name="returnDestination" class="lt-input" placeholder="Leave blank to reverse outbound" autocomplete="off" />
-                </div>
-            </div>
-        </div>
-
-        <div class="lt-actions">
-            <a asp-controller="Trip" asp-action="Index" class="lt-btn-cancel">Cancel</a>
-            <button type="submit" class="lt-btn-submit">Calculate &amp; Save Trip</button>
-        </div>
-    </form>
+        </aside>
+    </div>
 </div>
+
+<script>
+    // Return trip toggles
+    document.getElementById('chk-return').addEventListener('change', function () {
+        document.getElementById('return-extra').style.display = this.checked ? 'block' : 'none';
+    });
+    document.getElementById('chk-diffreturn').addEventListener('change', function () {
+        document.getElementById('return-different-fields').style.display = this.checked ? 'grid' : 'none';
+    });
+
+    // DEFRA 2025 approximate factors (kgCO2e per passenger-km)
+    const DEFRA = {
+        'Flight-Domestic':     0.24531,
+        'Flight-ShortHaul':    0.15553,
+        'Flight-LongHaul':     0.19085,
+        'Train-National':      0.03549,
+        'Train-International': 0.00415,
+        'Train-Underground':   0.02782,
+        'Car-Diesel':          0.16844,
+        'Car-Petrol':          0.17036,
+        'Car-Electric':        0.05302,
+        'Car-Hybrid':          0.11561,
+        'Bus-Local':           0.10312,
+        'Coach-National':      0.02716,
+        'Taxi-Regular':        0.20369,
+        'Taxi-Electric':       0.05302,
+        'Ferry-Foot':          0.01888,
+    };
+
+    function haversine(lat1, lng1, lat2, lng2) {
+        const R = 6371, r = Math.PI / 180;
+        const dLat = (lat2 - lat1) * r, dLng = (lng2 - lng1) * r;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    let map, origMarker, destMarker, routeLine, origLL = null, destLL = null;
+
+    const DARK_MAP_STYLE = [
+        { elementType: 'geometry', stylers: [{ color: '#1a2a1a' }] },
+        { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#7ba07a' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#0f1a0f' }] },
+        { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2a3a2a' }] },
+        { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#9da89a' }] },
+        { featureType: 'landscape', stylers: [{ color: '#1f2f1f' }] },
+        { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1a2a1a' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d4a2d' }] },
+        { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3d5c3b' }] },
+        { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1a2a1a' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1508' }] },
+    ];
+
+    function initMaps() {
+        const mapEl = document.getElementById('lt-map');
+        if (!mapEl) return;
+        map = new google.maps.Map(mapEl, {
+            center: { lat: 52.4, lng: -1.5 }, zoom: 6,
+            styles: DARK_MAP_STYLE,
+            disableDefaultUI: true,
+            zoomControl: true,
+        });
+
+        const opts = { types: [] };
+
+        const originInput = document.getElementById('Origin');
+        const destInput = document.getElementById('Destination');
+        const retOriginInput = document.getElementById('returnOrigin');
+        const retDestInput = document.getElementById('returnDestination');
+
+        const acOrigin = new google.maps.places.Autocomplete(originInput, opts);
+        const acDest = new google.maps.places.Autocomplete(destInput, opts);
+        if (retOriginInput) new google.maps.places.Autocomplete(retOriginInput, opts);
+        if (retDestInput) new google.maps.places.Autocomplete(retDestInput, opts);
+
+        document.querySelectorAll('.lt-waypoint-loc').forEach(function (inp) {
+            new google.maps.places.Autocomplete(inp, opts);
+        });
+
+        acOrigin.addListener('place_changed', function () {
+            const place = acOrigin.getPlace();
+            if (place && place.geometry) {
+                origLL = place.geometry.location;
+                placeMarker('orig', origLL, '#5C7A5A');
+                updatePreview();
+            }
+        });
+
+        acDest.addListener('place_changed', function () {
+            const place = acDest.getPlace();
+            if (place && place.geometry) {
+                destLL = place.geometry.location;
+                placeMarker('dest', destLL, '#C5B4E3');
+                updatePreview();
+            }
+        });
+    }
+
+    function placeMarker(key, pos, color) {
+        const icon = {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: color, fillOpacity: 1,
+            strokeColor: '#ffffff', strokeWeight: 2, scale: 8
+        };
+        if (key === 'orig') {
+            if (origMarker) origMarker.setMap(null);
+            origMarker = new google.maps.Marker({ position: pos, map, icon });
+        } else {
+            if (destMarker) destMarker.setMap(null);
+            destMarker = new google.maps.Marker({ position: pos, map, icon });
+        }
+        if (origLL && destLL) {
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend(origLL); bounds.extend(destLL);
+            map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
+            if (routeLine) routeLine.setMap(null);
+            routeLine = new google.maps.Polyline({
+                path: [origLL, destLL], map,
+                strokeColor: '#5C7A5A', strokeOpacity: 0.7, strokeWeight: 2, geodesic: true
+            });
+        }
+    }
+
+    function updatePreview() {
+        if (!origLL || !destLL) return;
+        const mode = document.getElementById('TransportMode').value || 'Car-Diesel';
+        const pax = parseInt(document.getElementById('Passengers').value) || 1;
+        const factor = DEFRA[mode] || 0.16844;
+        const dist = haversine(origLL.lat(), origLL.lng(), destLL.lat(), destLL.lng());
+        const kg = dist * factor * pax;
+        const originVal = document.getElementById('Origin').value;
+        const destVal = document.getElementById('Destination').value;
+
+        document.getElementById('pv-route').textContent = originVal + ' → ' + destVal;
+        document.getElementById('pv-dist').textContent = Math.round(dist) + ' km';
+        document.getElementById('pv-factor').textContent = factor.toFixed(5);
+        document.getElementById('pv-kg').textContent = kg.toFixed(3);
+        document.getElementById('pv-t').textContent = (kg / 1000).toFixed(5);
+        document.getElementById('pv-mode').textContent = mode;
+        document.getElementById('pv-pax').textContent = pax;
+        document.getElementById('lt-preview').style.display = 'block';
+    }
+
+    document.getElementById('TransportMode').addEventListener('change', updatePreview);
+    document.getElementById('Passengers').addEventListener('input', updatePreview);
+</script>
+
+@if (!string.IsNullOrEmpty(mapsKey)) {
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=@mapsKey&libraries=places&callback=initMaps"></script>
+}
+
 </body>
 </html>
