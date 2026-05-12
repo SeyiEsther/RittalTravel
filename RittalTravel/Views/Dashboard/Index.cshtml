@@ -1,0 +1,165 @@
+@model RittalTravel.Controllers.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="rt-page-header rt-flex-between">
+    <div>
+        <h1 class="rt-page-title">Dashboard</h1>
+        <p class="rt-page-sub">Rittal UK &mdash; Business Travel Carbon &mdash; @Model.CurrentYear</p>
+    </div>
+    @if (User.IsInRole("Admin"))
+    {
+        <a asp-controller="Report" asp-action="Generate" class="rt-btn rt-btn-red">
+            Download PDF Report
+        </a>
+    }
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="rt-alert rt-alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="rt-alert rt-alert-error">@TempData["Error"]</div>
+}
+
+<!-- Stat Cards -->
+<div class="rt-stat-grid">
+    <div class="rt-stat-card">
+        <div class="rt-stat-value">@Model.TotalTco2eThisYear.ToString("F3")</div>
+        <div class="rt-stat-label">tCO2e This Year</div>
+    </div>
+    <div class="rt-stat-card">
+        <div class="rt-stat-value">@Model.TotalTrips</div>
+        <div class="rt-stat-label">Total Trips</div>
+    </div>
+    <div class="rt-stat-card">
+        <div class="rt-stat-value">@Model.UniqueTravellers</div>
+        <div class="rt-stat-label">Unique Travellers</div>
+    </div>
+    <div class="rt-stat-card rt-stat-card--wide">
+        <div class="rt-stat-value rt-stat-value--sm">@Model.MostTravelledRoute</div>
+        <div class="rt-stat-label">Most Travelled Route</div>
+    </div>
+</div>
+
+<!-- Two column section -->
+<div class="rt-two-col">
+    <!-- Top 5 Travellers -->
+    <div class="rt-card">
+        <h2 class="rt-card-title">Top 5 Travellers</h2>
+        @if (Model.Top5Travellers.Any())
+        {
+            <table class="rt-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th class="rt-text-right">Trips</th>
+                        <th class="rt-text-right">kgCO2e</th>
+                        <th class="rt-text-right">tCO2e</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Model.Top5Travellers)
+                    {
+                        <tr>
+                            <td>@t.Name</td>
+                            <td class="rt-text-right">@t.Trips</td>
+                            <td class="rt-text-right">@t.TotalKgCO2e.ToString("F2")</td>
+                            <td class="rt-text-right">@t.TotalTco2e.ToString("F4")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="rt-empty">No trips recorded this year.</p>
+        }
+    </div>
+
+    <!-- Compliance Panel -->
+    <div class="rt-card">
+        <h2 class="rt-card-title">Compliance</h2>
+        <div class="rt-compliance-list">
+            <div class="rt-compliance-item">
+                <span class="rt-check">&#10003;</span>
+                <span>SCOPE 3 CATEGORY 6</span>
+            </div>
+            <div class="rt-compliance-item">
+                <span class="rt-check">&#10003;</span>
+                <span>DEFRA 2025 VERIFIED</span>
+            </div>
+            <div class="rt-compliance-item">
+                <span class="rt-check">&#10003;</span>
+                <span>GHG PROTOCOL ALIGNED</span>
+            </div>
+            <div class="rt-compliance-item">
+                <span class="rt-check">&#10003;</span>
+                <span>HAVERSINE METHODOLOGY</span>
+            </div>
+            <div class="rt-compliance-item">
+                <span class="rt-check">&#10003;</span>
+                <span>SECR COMPLIANT</span>
+            </div>
+        </div>
+
+        <div class="rt-breakdown">
+            <h3 class="rt-breakdown-title">Emissions by Mode (This Year)</h3>
+            <div class="rt-breakdown-row">
+                <span>Flights</span>
+                <span class="rt-mono">@Model.FlightTco2e.ToString("F3") tCO2e</span>
+            </div>
+            <div class="rt-breakdown-row">
+                <span>Rail</span>
+                <span class="rt-mono">@Model.RailTco2e.ToString("F3") tCO2e</span>
+            </div>
+            <div class="rt-breakdown-row">
+                <span>Road / Other</span>
+                <span class="rt-mono">@Model.RoadTco2e.ToString("F3") tCO2e</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Trips -->
+<div class="rt-card rt-mt">
+    <h2 class="rt-card-title">Recent Trips</h2>
+    @if (Model.RecentTrips.Any())
+    {
+        <div class="rt-table-wrap">
+            <table class="rt-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Traveller</th>
+                        <th>Route</th>
+                        <th>Mode</th>
+                        <th class="rt-text-right">kgCO2e</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var trip in Model.RecentTrips)
+                    {
+                        <tr>
+                            <td class="rt-mono">@trip.TripDate.ToString("dd MMM yyyy")</td>
+                            <td>@trip.TravellerName</td>
+                            <td>@trip.Origin &rarr; @trip.Destination</td>
+                            <td><span class="rt-mode-badge rt-mode-@trip.TransportMode.ToLower().Replace("-","").Replace(" ","")">@trip.TransportMode</span></td>
+                            <td class="rt-text-right rt-mono">@trip.KgCO2e.ToString("F3")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="rt-card-footer">
+            <a asp-controller="Trip" asp-action="Index" class="rt-link">View full trip log &rarr;</a>
+        </div>
+    }
+    else
+    {
+        <p class="rt-empty">No trips recorded yet.</p>
+    }
+</div>

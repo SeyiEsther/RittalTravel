@@ -1,0 +1,21 @@
+## Visual Studio / .NET
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+bin/
+obj/
+[Pp]ublish/
+*.pubxml
+*.pubxml.user
+
+## User secrets
+appsettings.*.local.json
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
