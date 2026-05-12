@@ -2,7 +2,6 @@
 @{
     ViewData["Title"] = "Log Trip";
     Layout = null;
-    var googleMapsKey = ViewBag.GoogleMapsApiKey as string ?? "";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -34,17 +33,21 @@
     </div>
 </nav>
 <div class="lt-wrap">
-    <div class="lt-header"><h1>Log Business Trip</h1><p>All fields calculated server-side using DEFRA 2025 factors</p></div>
+    <div class="lt-header">
+        <h1>Log Business Trip</h1>
+        <p>All calculations are performed server-side using DEFRA 2025 factors</p>
+    </div>
 
     @if (!ViewData.ModelState.IsValid) {
         <div class="rt-alert rt-alert-error">
-            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors)) { <div>@error.ErrorMessage</div> }
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors)) {
+                <div>@error.ErrorMessage</div>
+            }
         </div>
     }
 
-    <form id="logTripForm" asp-action="LogTrip" method="post">
+    <form asp-action="LogTrip" method="post">
         @Html.AntiForgeryToken()
-        <input type="hidden" id="waypointsInput" name="waypointsJson" value="" />
 
         <div class="lt-section">
             <h2 class="lt-section-title">Traveller Details</h2>
@@ -65,13 +68,56 @@
             <h2 class="lt-section-title">Journey</h2>
             <div class="lt-field">
                 <label asp-for="Origin">Origin <span class="lt-req">*</span></label>
-                <input asp-for="Origin" id="originInput" class="lt-input" placeholder="e.g. London, UK" required autocomplete="off" />
+                <input asp-for="Origin" class="lt-input" placeholder="e.g. London, UK" required autocomplete="off" />
             </div>
-            <div id="waypointsContainer"></div>
-            <button type="button" id="addWaypointBtn" class="lt-btn-ghost">+ Add Stopover</button>
+
+            <div class="lt-stopovers">
+                <h3 class="lt-stopover-heading">Stopovers <span class="lt-optional">(optional — fill any you need, leave others blank)</span></h3>
+                @for (int i = 0; i < 3; i++) {
+                    <div class="lt-stopover-row">
+                        <span class="lt-stopover-num">@(i + 1)</span>
+                        <div class="lt-stopover-fields">
+                            <div class="lt-field lt-field--grow">
+                                <label>Location</label>
+                                <input type="text" name="waypoints[@i].Location" class="lt-input" placeholder="City / location" autocomplete="off" />
+                            </div>
+                            <div class="lt-field">
+                                <label>Mode</label>
+                                <select name="waypoints[@i].Mode" class="lt-select">
+                                    <option value="Flight-Domestic">Flight - Domestic</option>
+                                    <option value="Flight-ShortHaul">Flight - Short Haul</option>
+                                    <option value="Flight-LongHaul">Flight - Long Haul</option>
+                                    <option value="Train-National" selected>Train - National</option>
+                                    <option value="Train-International">Train - International</option>
+                                    <option value="Car-Diesel">Car - Diesel</option>
+                                    <option value="Car-Petrol">Car - Petrol</option>
+                                    <option value="Car-Electric">Car - Electric</option>
+                                    <option value="Car-Hybrid">Car - Hybrid</option>
+                                    <option value="Bus-Local">Bus - Local</option>
+                                    <option value="Coach-National">Coach - National</option>
+                                    <option value="Taxi-Regular">Taxi - Regular</option>
+                                    <option value="Taxi-Electric">Taxi - Electric</option>
+                                    <option value="Ferry-Foot">Ferry - Foot</option>
+                                </select>
+                            </div>
+                            <div class="lt-field">
+                                <label>Class</label>
+                                <select name="waypoints[@i].TravelClass" class="lt-select">
+                                    <option value="Economy">Economy</option>
+                                    <option value="Business">Business</option>
+                                    <option value="First">First</option>
+                                    <option value="Standard">Standard</option>
+                                    <option value="Premium">Premium</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
             <div class="lt-field lt-mt">
                 <label asp-for="Destination">Destination <span class="lt-req">*</span></label>
-                <input asp-for="Destination" id="destinationInput" class="lt-input" placeholder="e.g. Frankfurt, Germany" required autocomplete="off" />
+                <input asp-for="Destination" class="lt-input" placeholder="e.g. Frankfurt, Germany" required autocomplete="off" />
             </div>
         </div>
 
@@ -131,83 +177,42 @@
                 </div>
             </div>
             <div class="lt-field lt-mt">
-                <label class="lt-checkbox-label">
-                    <input type="checkbox" id="returnTripCheck" name="returnTrip" value="true" class="lt-checkbox" />
-                    <span>Return trip</span>
-                </label>
-            </div>
-            <div id="returnSection" style="display:none">
-                <div class="lt-field">
-                    <label class="lt-checkbox-label">
-                        <input type="checkbox" id="differentReturnCheck" name="differentReturn" value="true" class="lt-checkbox" />
-                        <span>Different return route</span>
-                    </label>
-                </div>
-                <div id="returnRouteFields" style="display:none">
-                    <div class="lt-grid-2">
-                        <div class="lt-field"><label>Return Origin</label><input type="text" name="returnOrigin" class="lt-input" placeholder="Return origin" autocomplete="off" /></div>
-                        <div class="lt-field"><label>Return Destination</label><input type="text" name="returnDestination" class="lt-input" placeholder="Return destination" autocomplete="off" /></div>
-                    </div>
-                </div>
-            </div>
-            <div class="lt-field lt-mt">
                 <label asp-for="Notes">Notes</label>
                 <textarea asp-for="Notes" class="lt-textarea" rows="2" placeholder="Optional notes"></textarea>
             </div>
         </div>
 
-        <div class="lt-section lt-preview">
-            <h2 class="lt-section-title">Live Estimate</h2>
-            <p class="lt-preview-note">Client-side Haversine estimate — final calculation uses server-side Google Maps API</p>
-            <div class="lt-preview-grid">
-                <div class="lt-preview-item"><span class="lt-preview-label">Est. Distance</span><span class="lt-preview-value" id="previewDist">—</span></div>
-                <div class="lt-preview-item"><span class="lt-preview-label">DEFRA Factor</span><span class="lt-preview-value" id="previewFactor">—</span></div>
-                <div class="lt-preview-item"><span class="lt-preview-label">Est. kgCO2e</span><span class="lt-preview-value" id="previewKg">—</span></div>
-                <div class="lt-preview-item"><span class="lt-preview-label">Est. tCO2e</span><span class="lt-preview-value" id="previewT">—</span></div>
+        <div class="lt-section">
+            <h2 class="lt-section-title">Return Trip <span class="lt-optional">(optional)</span></h2>
+            <div class="lt-field">
+                <label class="lt-checkbox-label">
+                    <input type="checkbox" name="returnTrip" value="true" class="lt-checkbox" />
+                    <span>Include return leg in this record</span>
+                </label>
+            </div>
+            <div class="lt-field">
+                <label class="lt-checkbox-label">
+                    <input type="checkbox" name="differentReturn" value="true" class="lt-checkbox" />
+                    <span>Return route differs from outbound</span>
+                </label>
+            </div>
+            <div class="lt-grid-2 lt-mt">
+                <div class="lt-field">
+                    <label>Return Origin <span class="lt-optional">(if different)</span></label>
+                    <input type="text" name="returnOrigin" class="lt-input" placeholder="Leave blank to reverse outbound" autocomplete="off" />
+                </div>
+                <div class="lt-field">
+                    <label>Return Destination <span class="lt-optional">(if different)</span></label>
+                    <input type="text" name="returnDestination" class="lt-input" placeholder="Leave blank to reverse outbound" autocomplete="off" />
+                </div>
             </div>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(googleMapsKey)) {
-            <div class="lt-section"><h2 class="lt-section-title">Route Map</h2><div id="mapContainer" class="lt-map"></div></div>
-        }
-
         <div class="lt-actions">
             <a asp-controller="Trip" asp-action="Index" class="lt-btn-cancel">Cancel</a>
-            <button type="submit" id="submitBtn" class="lt-btn-submit">
-                <span id="submitText">Calculate and Save Trip</span>
-                <span id="submitSpinner" style="display:none">Calculating...</span>
-            </button>
+            <button type="submit" class="lt-btn-submit">Calculate &amp; Save Trip</button>
         </div>
     </form>
 </div>
-<script>
-var DEFRA_FACTORS={"Flight-Domestic":0.24468,"Flight-ShortHaul":0.15553,"Flight-LongHaul":0.19085,"Train-National":0.03549,"Train-International":0.00415,"Train-Underground":0.02800,"Car-Diesel":0.16844,"Car-Petrol":0.17380,"Car-Electric":0.04714,"Car-Hybrid":0.11565,"Bus-Local":0.10213,"Coach-National":0.02722,"Taxi-Regular":0.14938,"Taxi-Electric":0.04714,"Ferry-Foot":0.01867};
-var CLASS_MULT={"Economy":1.0,"Business":2.0,"First":2.4,"Standard":1.0,"Premium":1.6};
-var CITY_COORDS={"london":[51.5074,-0.1278],"manchester":[53.4808,-2.2426],"birmingham":[52.4862,-1.8904],"edinburgh":[55.9533,-3.1883],"bristol":[51.4545,-2.5879],"leeds":[53.8008,-1.5491],"sheffield":[53.3811,-1.4701],"frankfurt":[50.1109,8.6821],"brussels":[50.8503,4.3517],"new york":[40.7128,-74.006],"paris":[48.8566,2.3522],"amsterdam":[52.3676,4.9041],"berlin":[52.5200,13.4050],"dublin":[53.3498,-6.2603],"glasgow":[55.8642,-4.2518],"liverpool":[53.4084,-2.9916],"hellaby":[53.4167,-1.2833]};
-function toRad(d){return d*Math.PI/180;}
-function haversine(la1,lo1,la2,lo2){var R=6371,dLa=toRad(la2-la1),dLo=toRad(lo2-lo1),a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(toRad(la1))*Math.cos(toRad(la2))*Math.sin(dLo/2)*Math.sin(dLo/2);return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
-function guessCoords(n){if(!n)return null;n=n.toLowerCase();for(var k in CITY_COORDS){if(n.indexOf(k)>=0)return CITY_COORDS[k];}return null;}
-function updatePreview(){var o=document.getElementById('originInput').value,d=document.getElementById('destinationInput').value,m=document.querySelector('[name="TransportMode"]').value,cl=document.querySelector('[name="TravelClass"]').value||'Economy',p=parseInt(document.querySelector('[name="Passengers"]').value)||1,c1=guessCoords(o),c2=guessCoords(d);if(!c1||!c2||!m){['previewDist','previewFactor','previewKg','previewT'].forEach(function(id){document.getElementById(id).textContent='—';});return;}var dist=haversine(c1[0],c1[1],c2[0],c2[1]),bf=DEFRA_FACTORS[m]||0,mult=(m.indexOf('Flight')>=0)?(CLASS_MULT[cl]||1):1,f=bf*mult,kg=dist*f*p;document.getElementById('previewDist').textContent=dist.toFixed(1)+' km';document.getElementById('previewFactor').textContent=f.toFixed(5);document.getElementById('previewKg').textContent=kg.toFixed(3);document.getElementById('previewT').textContent=(kg/1000).toFixed(6);}
-['originInput','destinationInput'].forEach(function(id){document.getElementById(id).addEventListener('input',updatePreview);});
-document.querySelector('[name="TransportMode"]').addEventListener('change',updatePreview);
-document.querySelector('[name="TravelClass"]').addEventListener('change',updatePreview);
-document.querySelector('[name="Passengers"]').addEventListener('input',updatePreview);
-document.getElementById('returnTripCheck').addEventListener('change',function(){document.getElementById('returnSection').style.display=this.checked?'block':'none';});
-document.getElementById('differentReturnCheck').addEventListener('change',function(){document.getElementById('returnRouteFields').style.display=this.checked?'block':'none';});
-var wpCount=0;
-document.getElementById('addWaypointBtn').addEventListener('click',function(){wpCount++;var idx=wpCount,div=document.createElement('div');div.className='lt-waypoint';div.id='wp-'+idx;div.innerHTML='<div class="lt-waypoint-inner"><div class="lt-field lt-field--grow"><label>Stopover '+idx+'</label><input type="text" class="lt-input wp-location" placeholder="City / location" autocomplete="off"/></div><div class="lt-field"><label>Mode</label><select class="lt-select wp-mode"><option value="Flight-ShortHaul">Flight - Short Haul</option><option value="Flight-Domestic">Flight - Domestic</option><option value="Flight-LongHaul">Flight - Long Haul</option><option value="Train-National" selected>Train - National</option><option value="Train-International">Train - International</option><option value="Car-Diesel">Car - Diesel</option><option value="Car-Petrol">Car - Petrol</option><option value="Car-Electric">Car - Electric</option><option value="Car-Hybrid">Car - Hybrid</option><option value="Bus-Local">Bus - Local</option><option value="Coach-National">Coach - National</option><option value="Taxi-Regular">Taxi - Regular</option><option value="Ferry-Foot">Ferry - Foot</option></select></div><div class="lt-field"><label>Class</label><select class="lt-select wp-class"><option value="Economy">Economy</option><option value="Business">Business</option><option value="First">First</option><option value="Standard">Standard</option></select></div><button type="button" class="lt-btn-remove" onclick="removeWp('+idx+')">Remove</button></div>';document.getElementById('waypointsContainer').appendChild(div);});
-function removeWp(i){var e=document.getElementById('wp-'+i);if(e)e.remove();}
-document.getElementById('logTripForm').addEventListener('submit',function(){var wps=[];document.querySelectorAll('.lt-waypoint').forEach(function(d){wps.push({Location:d.querySelector('.wp-location').value,Mode:d.querySelector('.wp-mode').value,TravelClass:d.querySelector('.wp-class').value});});document.getElementById('waypointsInput').value=JSON.stringify(wps);var btn=document.getElementById('submitBtn');btn.disabled=true;document.getElementById('submitText').style.display='none';document.getElementById('submitSpinner').style.display='inline';});
-</script>
-@if (!string.IsNullOrWhiteSpace(googleMapsKey)) {
-    <script>
-    var map,ds,dr;
-    function initMap(){map=new google.maps.Map(document.getElementById('mapContainer'),{center:{lat:52.5,lng:-1.9},zoom:5});ds=new google.maps.DirectionsService();dr=new google.maps.DirectionsRenderer({map:map,polylineOptions:{strokeColor:'#3FB950',strokeWeight:3}});}
-    function updateMap(){var o=document.getElementById('originInput').value,d=document.getElementById('destinationInput').value;if(!o||!d||!ds)return;ds.route({origin:o,destination:d,travelMode:'DRIVING'},function(r,s){if(s==='OK')dr.setDirections(r);});}
-    document.getElementById('originInput').addEventListener('change',updateMap);
-    document.getElementById('destinationInput').addEventListener('change',updateMap);
-    </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=@googleMapsKey&callback=initMap" async defer></script>
-}
 </body>
 </html>
