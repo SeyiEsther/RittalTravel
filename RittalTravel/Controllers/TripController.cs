@@ -14,14 +14,10 @@ public class TripController : Controller
     private readonly RittalTravelContext _db;
     private readonly GoogleMapsService _maps;
     private readonly ILogger<TripController> _logger;
-    private readonly IConfiguration _config;
 
-    public TripController(RittalTravelContext db, GoogleMapsService maps, ILogger<TripController> logger, IConfiguration config)
+    public TripController(RittalTravelContext db, GoogleMapsService maps, ILogger<TripController> logger)
     {
-        _db = db;
-        _maps = maps;
-        _logger = logger;
-        _config = config;
+        _db = db; _maps = maps; _logger = logger;
     }
 
     [HttpGet]
@@ -29,19 +25,14 @@ public class TripController : Controller
     {
         try
         {
-            var trips = await _db.Trips
-                .Where(t => t.OrganisationId == 1)
-                .OrderByDescending(t => t.TripDate)
-                .ToListAsync();
-
+            var trips = await _db.Trips.Where(t => t.OrganisationId == 1)
+                .OrderByDescending(t => t.TripDate).ToListAsync();
             int currentYear = DateTime.Now.Year;
             var yearTrips = trips.Where(t => t.TripDate.Year == currentYear).ToList();
-
-            ViewBag.TotalTco2e     = yearTrips.Sum(t => t.KgCO2e) / 1000.0;
-            ViewBag.TotalTrips     = yearTrips.Count;
+            ViewBag.TotalTco2e       = yearTrips.Sum(t => t.KgCO2e) / 1000.0;
+            ViewBag.TotalTrips       = yearTrips.Count;
             ViewBag.UniqueTravellers = yearTrips.Select(t => t.TravellerName).Distinct().Count();
-            ViewBag.CurrentYear    = currentYear;
-
+            ViewBag.CurrentYear      = currentYear;
             return View(trips);
         }
         catch (Exception ex)
@@ -56,159 +47,83 @@ public class TripController : Controller
     [Authorize(Roles = "Admin")]
     public IActionResult LogTrip()
     {
-        ViewBag.GoogleMapsApiKey = _config["GoogleMaps:ApiKey"] ?? "";
-        var trip = new Trip
-        {
-            TripDate   = DateTime.Today,
-            Passengers = 1,
-            LoggedBy   = User.Identity?.Name ?? "",
-        };
-        return View(trip);
+        return View(new Trip { TripDate = DateTime.Today, Passengers = 1, LoggedBy = User.Identity?.Name ?? "" });
     }
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> LogTrip(Trip trip,
-        string? waypointsJson,
-        bool returnTrip = false,
-        bool differentReturn = false,
-        string? returnOrigin = null,
-        string? returnDestination = null)
+    public async Task<IActionResult> LogTrip(Trip trip, List<WaypointEntry>? waypoints,
+        bool returnTrip = false, bool differentReturn = false,
+        string? returnOrigin = null, string? returnDestination = null)
     {
-        // Remove server-calculated fields from validation
-        ModelState.Remove(nameof(Trip.DistanceKm));
-        ModelState.Remove(nameof(Trip.EmissionFactor));
-        ModelState.Remove(nameof(Trip.KgCO2e));
-        ModelState.Remove(nameof(Trip.Formula));
-        ModelState.Remove(nameof(Trip.DistanceMethodology));
-        ModelState.Remove(nameof(Trip.DefraFactorYear));
-        ModelState.Remove(nameof(Trip.OrganisationId));
-        ModelState.Remove(nameof(Trip.Organisation));
-        ModelState.Remove(nameof(Trip.CreatedAt));
-        ModelState.Remove(nameof(Trip.LoggedBy));
-        ModelState.Remove(nameof(Trip.Id));
+        foreach (var f in new[] { nameof(Trip.DistanceKm), nameof(Trip.EmissionFactor), nameof(Trip.KgCO2e),
+            nameof(Trip.Formula), nameof(Trip.DistanceMethodology), nameof(Trip.DefraFactorYear),
+            nameof(Trip.OrganisationId), nameof(Trip.Organisation), nameof(Trip.CreatedAt), nameof(Trip.LoggedBy), nameof(Trip.Id) })
+            ModelState.Remove(f);
 
         if (!ModelState.IsValid)
-        {
-            _logger.LogWarning("LogTrip ModelState invalid: {Errors}",
-                string.Join("; ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
             return View(trip);
-        }
+
+        var legs = waypoints?.Where(w => !string.IsNullOrWhiteSpace(w.Location)).ToList();
 
         try
         {
-            // Parse waypoints
-            List<WaypointEntry>? waypoints = null;
-            if (!string.IsNullOrWhiteSpace(waypointsJson))
+            double totalDist = 0, totalKg = 0, maxLegDist = 0;
+            string dominantMode = trip.TransportMode;
+            var formulaParts = new List<string>();
+
+            if (legs != null && legs.Count > 0)
             {
-                try { waypoints = JsonConvert.DeserializeObject<List<WaypointEntry>>(waypointsJson); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Waypoints JSON parse failed"); }
-            }
+                var locs = new List<string> { trip.Origin };
+                locs.AddRange(legs.Select(w => w.Location!));
+                locs.Add(trip.Destination);
 
-            double totalDistance = 0;
-            double totalKg       = 0;
-            var formulaParts     = new List<string>();
-            string dominantMode  = trip.TransportMode;
-            double maxLegDist    = 0;
+                var modes   = legs.Select(w => w.Mode        ?? trip.TransportMode).Append(trip.TransportMode).ToList();
+                var classes = legs.Select(w => w.TravelClass ?? trip.TravelClass).Append(trip.TravelClass).ToList();
 
-            if (waypoints != null && waypoints.Count > 0)
-            {
-                // Multi-leg trip
-                var locations = new List<string> { trip.Origin };
-                var modes     = new List<string>();
-                var classes   = new List<string>();
-
-                foreach (var wp in waypoints)
+                for (int i = 0; i < locs.Count - 1; i++)
                 {
-                    if (string.IsNullOrWhiteSpace(wp.Location))
+                    double legDist = await _maps.GetDistanceKm(locs[i], locs[i + 1], modes[i]);
+                    double legFactor = DefraCalculator.GetEmissionFactor(modes[i], classes[i]);
+                    if (legFactor == 0 || legDist <= 0)
                     {
-                        ModelState.AddModelError("", "All waypoint locations must be filled in.");
+                        ModelState.AddModelError("", $"Could not calculate leg {locs[i]} → {locs[i + 1]}.");
                         return View(trip);
                     }
-                    locations.Add(wp.Location);
-                    modes.Add(wp.Mode ?? trip.TransportMode);
-                    classes.Add(wp.TravelClass ?? trip.TravelClass);
-                }
-                locations.Add(trip.Destination);
-                // Last leg uses trip-level mode
-                modes.Add(trip.TransportMode);
-                classes.Add(trip.TravelClass);
-
-                for (int i = 0; i < locations.Count - 1; i++)
-                {
-                    string legOrigin = locations[i];
-                    string legDest   = locations[i + 1];
-                    string legMode   = modes[i];
-                    string legClass  = classes[i];
-
-                    double legDist = await _maps.GetDistanceKm(legOrigin, legDest, legMode);
-                    double legFactor = DefraCalculator.GetEmissionFactor(legMode, legClass);
-
-                    if (legFactor == 0)
-                    {
-                        ModelState.AddModelError("", $"Unknown transport mode '{legMode}'.");
-                        return View(trip);
-                    }
-                    if (legDist <= 0)
-                    {
-                        ModelState.AddModelError("", $"Could not calculate distance for leg {legOrigin} → {legDest}.");
-                        return View(trip);
-                    }
-
                     double legKg = DefraCalculator.CalculateKgCO2e(legDist, legFactor, trip.Passengers);
-                    totalDistance += legDist;
-                    totalKg       += legKg;
-                    formulaParts.Add($"Leg {i + 1} ({legMode}): {DefraCalculator.GetFormula(legMode, legClass, legDist, legFactor, trip.Passengers, legKg)}");
-
-                    if (legDist > maxLegDist)
-                    {
-                        maxLegDist    = legDist;
-                        dominantMode  = legMode;
-                    }
+                    totalDist += legDist; totalKg += legKg;
+                    formulaParts.Add($"Leg {i + 1} ({modes[i]}): {DefraCalculator.GetFormula(modes[i], classes[i], legDist, legFactor, trip.Passengers, legKg)}");
+                    if (legDist > maxLegDist) { maxLegDist = legDist; dominantMode = modes[i]; }
                 }
-
-                trip.Waypoints = waypointsJson;
+                trip.Waypoints = JsonConvert.SerializeObject(legs);
             }
             else
             {
-                // Direct trip
-                double dist = await _maps.GetDistanceKm(trip.Origin, trip.Destination, trip.TransportMode);
+                double dist   = await _maps.GetDistanceKm(trip.Origin, trip.Destination, trip.TransportMode);
                 double factor = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
-
-                if (factor == 0)
+                if (factor == 0 || dist <= 0)
                 {
-                    ModelState.AddModelError("", $"Unknown transport mode '{trip.TransportMode}'.");
+                    ModelState.AddModelError("", "Could not calculate distance. Check origin, destination and mode.");
                     return View(trip);
                 }
-                if (dist <= 0)
-                {
-                    ModelState.AddModelError("", "Could not calculate distance. Check origin and destination.");
-                    return View(trip);
-                }
-
                 double kg = DefraCalculator.CalculateKgCO2e(dist, factor, trip.Passengers);
-                totalDistance = dist;
-                totalKg       = kg;
+                totalDist = dist; totalKg = kg;
                 formulaParts.Add(DefraCalculator.GetFormula(trip.TransportMode, trip.TravelClass, dist, factor, trip.Passengers, kg));
             }
 
-            // Handle return trip
             if (returnTrip)
             {
-                string retOrig = differentReturn && !string.IsNullOrWhiteSpace(returnOrigin) ? returnOrigin : trip.Destination;
-                string retDest = differentReturn && !string.IsNullOrWhiteSpace(returnDestination) ? returnDestination : trip.Origin;
-
-                double retDist = await _maps.GetDistanceKm(retOrig, retDest, trip.TransportMode);
-                double retFactor = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
-                double retKg = DefraCalculator.CalculateKgCO2e(retDist, retFactor, trip.Passengers);
-
-                totalDistance += retDist;
-                totalKg       += retKg;
-                formulaParts.Add($"Return: {DefraCalculator.GetFormula(trip.TransportMode, trip.TravelClass, retDist, retFactor, trip.Passengers, retKg)}");
+                string ro  = differentReturn && !string.IsNullOrWhiteSpace(returnOrigin)      ? returnOrigin!      : trip.Destination;
+                string rd  = differentReturn && !string.IsNullOrWhiteSpace(returnDestination) ? returnDestination! : trip.Origin;
+                double rd2 = await _maps.GetDistanceKm(ro, rd, trip.TransportMode);
+                double rf  = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
+                double rkg = DefraCalculator.CalculateKgCO2e(rd2, rf, trip.Passengers);
+                totalDist += rd2; totalKg += rkg;
+                formulaParts.Add($"Return: {DefraCalculator.GetFormula(trip.TransportMode, trip.TravelClass, rd2, rf, trip.Passengers, rkg)}");
             }
 
-            trip.DistanceKm          = Math.Round(totalDistance, 2);
+            trip.DistanceKm          = Math.Round(totalDist, 2);
             trip.EmissionFactor      = DefraCalculator.GetEmissionFactor(dominantMode, trip.TravelClass);
             trip.KgCO2e              = Math.Round(totalKg, 3);
             trip.Formula             = string.Join(" | ", formulaParts);
@@ -221,17 +136,15 @@ public class TripController : Controller
 
             _db.Trips.Add(trip);
             await _db.SaveChangesAsync();
-
-            _logger.LogInformation("Trip logged: {Name} {Origin} → {Dest} {Kg:F3} kgCO2e by {User}",
-                trip.TravellerName, trip.Origin, trip.Destination, trip.KgCO2e, trip.LoggedBy);
-
+            _logger.LogInformation("Trip logged: {Name} {O} → {D} {Kg:F3} kgCO2e",
+                trip.TravellerName, trip.Origin, trip.Destination, trip.KgCO2e);
             TempData["Success"] = $"Trip logged: {trip.TravellerName} — {trip.Origin} → {trip.Destination} — {trip.KgCO2e:F3} kgCO2e";
             return RedirectToAction(nameof(Index));
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Google Maps HTTP error while logging trip");
-            ModelState.AddModelError("", "Could not reach Google Maps API. Check internet connection or API key.");
+            _logger.LogError(ex, "Google Maps HTTP error");
+            ModelState.AddModelError("", "Could not reach Google Maps API.");
             return View(trip);
         }
         catch (Exception ex)
@@ -250,23 +163,17 @@ public class TripController : Controller
         try
         {
             var trip = await _db.Trips.FindAsync(id);
-            if (trip == null)
-            {
-                TempData["Error"] = "Trip not found.";
-                return RedirectToAction(nameof(Index));
-            }
-
+            if (trip == null) { TempData["Error"] = "Trip not found."; return RedirectToAction(nameof(Index)); }
             _db.Trips.Remove(trip);
             await _db.SaveChangesAsync();
             _logger.LogInformation("Trip {Id} deleted by {User}", id, User.Identity?.Name);
-            TempData["Success"] = $"Trip for {trip.TravellerName} ({trip.Origin} → {trip.Destination}) deleted.";
+            TempData["Success"] = $"Trip for {trip.TravellerName} deleted.";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete trip {Id} failed", id);
             TempData["Error"] = "Could not delete trip. Please try again.";
         }
-
         return RedirectToAction(nameof(Index));
     }
 }
