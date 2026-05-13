@@ -46,7 +46,7 @@ public class ReportController : Controller
         double flightTco2e = trips.Where(t => t.TransportMode.StartsWith("Flight")).Sum(t => t.KgCO2e) / 1000.0;
         double railTco2e   = trips.Where(t => t.TransportMode.StartsWith("Train")).Sum(t => t.KgCO2e) / 1000.0;
         double roadTco2e   = trips.Where(t => !t.TransportMode.StartsWith("Flight") && !t.TransportMode.StartsWith("Train")).Sum(t => t.KgCO2e) / 1000.0;
-        var navy = Color.FromHex("#0D1B2A"); var red = Color.FromHex("#CC0000");
+        var navy = Color.FromHex("#0f1a0f"); var red = Color.FromHex("#5C7A5A");
         var white = Colors.White; var grey = Color.FromHex("#8B949E"); var lgrey = Color.FromHex("#E8ECF0");
 
         return Document.Create(c =>
