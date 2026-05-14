@@ -38,6 +38,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
 });
 
+builder.Services.AddHttpClient<OsrmRoutingService>(c => c.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddHttpClient<GoogleMapsService>(c => c.Timeout = TimeSpan.FromSeconds(15));
 
 builder.Services.AddSession(options =>

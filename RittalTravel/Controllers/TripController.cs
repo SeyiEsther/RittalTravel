@@ -55,7 +55,8 @@ public class TripController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> LogTrip(Trip trip, List<WaypointEntry>? waypoints,
         bool returnTrip = false, bool differentReturn = false,
-        string? returnOrigin = null, string? returnDestination = null)
+        string? returnOrigin = null, string? returnDestination = null,
+        bool accountForDetours = false)
     {
         foreach (var f in new[] { nameof(Trip.DistanceKm), nameof(Trip.EmissionFactor), nameof(Trip.KgCO2e),
             nameof(Trip.Formula), nameof(Trip.DistanceMethodology), nameof(Trip.DefraFactorYear),
@@ -81,7 +82,7 @@ public class TripController : Controller
                 var classes = legs.Select(w => w.TravelClass ?? trip.TravelClass).Append(trip.TravelClass).ToList();
                 for (int i = 0; i < locs.Count - 1; i++)
                 {
-                    double legDist   = await _maps.GetDistanceKm(locs[i], locs[i + 1], modes[i]);
+                    double legDist   = await _maps.GetDistanceKm(locs[i], locs[i + 1], modes[i], accountForDetours);
                     double legFactor = DefraCalculator.GetEmissionFactor(modes[i], classes[i]);
                     if (legFactor == 0 || legDist <= 0) { ModelState.AddModelError("", $"Could not calculate leg {locs[i]} to {locs[i + 1]}."); return View(trip); }
                     double legKg = DefraCalculator.CalculateKgCO2e(legDist, legFactor, trip.Passengers);
@@ -93,7 +94,7 @@ public class TripController : Controller
             }
             else
             {
-                double dist   = await _maps.GetDistanceKm(trip.Origin, trip.Destination, trip.TransportMode);
+                double dist   = await _maps.GetDistanceKm(trip.Origin, trip.Destination, trip.TransportMode, accountForDetours);
                 double factor = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
                 if (factor == 0 || dist <= 0) { ModelState.AddModelError("", "Could not calculate distance. Check origin, destination and mode."); return View(trip); }
                 double kg = DefraCalculator.CalculateKgCO2e(dist, factor, trip.Passengers);
@@ -105,7 +106,7 @@ public class TripController : Controller
             {
                 string ro  = differentReturn && !string.IsNullOrWhiteSpace(returnOrigin)      ? returnOrigin!      : trip.Destination;
                 string rd  = differentReturn && !string.IsNullOrWhiteSpace(returnDestination) ? returnDestination! : trip.Origin;
-                double rd2 = await _maps.GetDistanceKm(ro, rd, trip.TransportMode);
+                double rd2 = await _maps.GetDistanceKm(ro, rd, trip.TransportMode, accountForDetours);
                 double rf  = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
                 double rkg = DefraCalculator.CalculateKgCO2e(rd2, rf, trip.Passengers);
                 totalDist += rd2; totalKg += rkg;

@@ -5,40 +5,63 @@ namespace RittalTravel.Services;
 public class GoogleMapsService
 {
     private readonly HttpClient _http;
+    private readonly OsrmRoutingService _osrm;
     private readonly string? _apiKey;
     private readonly ILogger<GoogleMapsService> _logger;
 
-    public GoogleMapsService(HttpClient http, IConfiguration config, ILogger<GoogleMapsService> logger)
+    public GoogleMapsService(HttpClient http, OsrmRoutingService osrm, IConfiguration config, ILogger<GoogleMapsService> logger)
     {
-        _http = http;
+        _http   = http;
+        _osrm   = osrm;
         _apiKey = config["GoogleMaps:ApiKey"];
         _logger = logger;
         if (string.IsNullOrWhiteSpace(_apiKey))
             _logger.LogWarning("Google Maps API key is not configured. Distance calculations will fall back to Haversine.");
     }
 
-    public async Task<double> GetDistanceKm(string origin, string destination, string mode)
+    /// <param name="accountForDetours">
+    /// When true, road routing avoids motorway links so detour distance is captured
+    /// (applies to car/bus/coach/taxi modes only).
+    /// </param>
+    public async Task<double> GetDistanceKm(string origin, string destination, string mode,
+        bool accountForDetours = false)
     {
         if (mode.StartsWith("Flight", StringComparison.OrdinalIgnoreCase) ||
             mode.StartsWith("Ferry", StringComparison.OrdinalIgnoreCase))
             return await GetFlightDistanceKm(origin, destination);
-        return await GetRoadDistanceKm(origin, destination, mode);
+
+        if (mode.StartsWith("Train", StringComparison.OrdinalIgnoreCase))
+            return await GetRailDistanceKm(origin, destination, mode);
+
+        return await GetRoadDistanceKm(origin, destination, mode, accountForDetours);
     }
 
-    public async Task<double> GetRoadDistanceKm(string origin, string destination, string mode)
+    // ── Rail ─────────────────────────────────────────────────────────────────
+
+    private async Task<double> GetRailDistanceKm(string origin, string destination, string mode)
+    {
+        // For international rail (e.g. Eurostar) prefer the physical track-network database.
+        if (mode.Equals("Train-International", StringComparison.OrdinalIgnoreCase) &&
+            DefraCalculator.TryGetRailNetworkDistance(origin, destination, out double networkKm))
+        {
+            _logger.LogInformation("Rail network DB: {O} → {D} = {Km} km (track distance)", origin, destination, networkKm);
+            return networkKm;
+        }
+
+        // Fall through to Google Maps transit for national/underground or unknown corridors.
+        return await GetGoogleMapsRailDistanceKm(origin, destination);
+    }
+
+    private async Task<double> GetGoogleMapsRailDistanceKm(string origin, string destination)
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
             _logger.LogWarning("No API key — using Haversine fallback for {O} to {D}", origin, destination);
             return await GetFlightDistanceKm(origin, destination);
         }
-        string travelMode = mode.StartsWith("Train", StringComparison.OrdinalIgnoreCase) ? "transit" : "driving";
-        string trafficParams = travelMode == "driving"
-            ? $"&departure_time={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}&traffic_model=best_guess"
-            : "";
         string url = $"https://maps.googleapis.com/maps/api/distancematrix/json"
                    + $"?origins={Uri.EscapeDataString(origin)}&destinations={Uri.EscapeDataString(destination)}"
-                   + $"&mode={travelMode}{trafficParams}&key={_apiKey}";
+                   + $"&mode=transit&key={_apiKey}";
         try
         {
             var response = await _http.GetAsync(url);
@@ -46,10 +69,7 @@ public class GoogleMapsService
             using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var root = doc.RootElement;
             if (root.GetProperty("status").GetString() == "REQUEST_DENIED")
-            {
-                _logger.LogError("Google Maps API request denied.");
                 return await GetFlightDistanceKm(origin, destination);
-            }
             var rows = root.GetProperty("rows");
             if (rows.GetArrayLength() == 0) return await GetFlightDistanceKm(origin, destination);
             var element = rows[0].GetProperty("elements")[0];
@@ -59,10 +79,73 @@ public class GoogleMapsService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Distance Matrix error for {O} to {D}", origin, destination);
+            _logger.LogError(ex, "Distance Matrix (transit) error for {O} to {D}", origin, destination);
             return await GetFlightDistanceKm(origin, destination);
         }
     }
+
+    // ── Road ─────────────────────────────────────────────────────────────────
+
+    public async Task<double> GetRoadDistanceKm(string origin, string destination, string mode,
+        bool accountForDetours = false)
+    {
+        // Try OSRM first — it uses the physical road-network graph.
+        double[]? origCoords = await Geocode(origin);
+        double[]? destCoords = await Geocode(destination);
+
+        if (origCoords != null && destCoords != null)
+        {
+            double? osrmKm = await _osrm.GetDistanceKm(
+                origCoords[0], origCoords[1],
+                destCoords[0], destCoords[1],
+                excludeMotorway: accountForDetours);
+
+            if (osrmKm.HasValue)
+            {
+                _logger.LogInformation("OSRM: {O} → {D} = {Km} km (detour={Det})",
+                    origin, destination, osrmKm.Value, accountForDetours);
+                return osrmKm.Value;
+            }
+        }
+
+        // Fall back to Google Maps Distance Matrix.
+        return await GetGoogleMapsRoadDistanceKm(origin, destination);
+    }
+
+    private async Task<double> GetGoogleMapsRoadDistanceKm(string origin, string destination)
+    {
+        if (string.IsNullOrWhiteSpace(_apiKey))
+        {
+            _logger.LogWarning("No API key — using Haversine fallback for {O} to {D}", origin, destination);
+            return await GetFlightDistanceKm(origin, destination);
+        }
+        string trafficParams = $"&departure_time={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}&traffic_model=best_guess";
+        string url = $"https://maps.googleapis.com/maps/api/distancematrix/json"
+                   + $"?origins={Uri.EscapeDataString(origin)}&destinations={Uri.EscapeDataString(destination)}"
+                   + $"&mode=driving{trafficParams}&key={_apiKey}";
+        try
+        {
+            var response = await _http.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = doc.RootElement;
+            if (root.GetProperty("status").GetString() == "REQUEST_DENIED")
+                return await GetFlightDistanceKm(origin, destination);
+            var rows = root.GetProperty("rows");
+            if (rows.GetArrayLength() == 0) return await GetFlightDistanceKm(origin, destination);
+            var element = rows[0].GetProperty("elements")[0];
+            if (element.GetProperty("status").GetString() != "OK") return await GetFlightDistanceKm(origin, destination);
+            double metres = element.GetProperty("distance").GetProperty("value").GetDouble();
+            return metres / 1000.0;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Distance Matrix (driving) error for {O} to {D}", origin, destination);
+            return await GetFlightDistanceKm(origin, destination);
+        }
+    }
+
+    // ── Flight / Ferry (Haversine Great Circle) ───────────────────────────────
 
     public async Task<double> GetFlightDistanceKm(string origin, string destination)
     {
@@ -82,8 +165,11 @@ public class GoogleMapsService
         }
     }
 
+    // ── Geocoding ─────────────────────────────────────────────────────────────
+
     private async Task<double[]?> Geocode(string address)
     {
+        if (string.IsNullOrWhiteSpace(_apiKey)) return null;
         string url = $"https://maps.googleapis.com/maps/api/geocode/json?address={Uri.EscapeDataString(address)}&key={_apiKey}";
         var response = await _http.GetAsync(url);
         response.EnsureSuccessStatusCode();

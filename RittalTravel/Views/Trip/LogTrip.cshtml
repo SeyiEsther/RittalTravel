@@ -115,6 +115,21 @@
                     </div>
                 </div>
 
+                <!-- Road Closures / Detour -->
+                <div class="lt-section" id="detour-section" style="display:none">
+                    <div class="lt-toggle-row">
+                        <span class="lt-toggle-label">Account for Active Road Closures &amp; Major Congestion Detours</span>
+                        <label class="lt-toggle-sw">
+                            <input type="checkbox" name="accountForDetours" value="true" id="chk-detours" />
+                            <div class="lt-toggle-track"><div class="lt-toggle-thumb"></div></div>
+                        </label>
+                    </div>
+                    <p style="font-size:.75rem;color:var(--txm);margin:.5rem 0 0">
+                        When enabled, the routing solver excludes closed motorway links and returns the
+                        true detour distance for compliance auditing (road modes only).
+                    </p>
+                </div>
+
                 <!-- Return Trip -->
                 <div class="lt-section">
                     <div class="lt-toggle-row">
@@ -191,7 +206,8 @@
                         </div>
                         <div class="lt-preview-legs" id="prev-legs"></div>
                         <div class="lt-preview-note">
-                            Client-side estimate &middot; Haversine distance &middot; DEFRA 2025 factors<br>
+                            Client-side estimate &middot; DEFRA 2025/2026 factors<br>
+                            Flights &amp; ferries: Haversine Great Circle &middot; Rail: physical track mileage (GTFS/network DB) &middot; Road: Network Routing Graph (OSRM/Google Maps)<br>
                             Server recalculates with exact route distances on save.
                         </div>
                     </div>
@@ -209,7 +225,7 @@ const DEFRA_BASE = {
     'Flight-ShortHaul':    0.15553,
     'Flight-LongHaul':     0.19085,
     'Train-National':      0.03549,
-    'Train-International': 0.00415,
+    'Train-International': 0.004432, // DEFRA 2025/2026 DESNZ verified TTW factor
     'Train-Underground':   0.02800,
     'Car-Diesel':          0.16844,
     'Car-Petrol':          0.17380,
@@ -483,6 +499,7 @@ function updatePreview() {
     document.getElementById('prev-dist').textContent = totalDist.toFixed(0) + ' km';
     document.getElementById('prev-mode').textContent = domMode;
     document.getElementById('prev-pax').textContent  = pax;
+    updateDetourVisibility();
     const legsEl = document.getElementById('prev-legs');
     if (valid.length > 1) {
         legsEl.style.display = 'block';
@@ -497,6 +514,14 @@ function updatePreview() {
     } else {
         legsEl.style.display = 'none';
     }
+}
+
+const ROAD_MODES = new Set(['Car-Diesel','Car-Petrol','Car-Electric','Car-Hybrid','Bus-Local','Coach-National','Taxi-Regular','Taxi-Electric']);
+
+function updateDetourVisibility() {
+    const anyRoad = legModeValues.some(v => { const { mode } = splitMode(v); return ROAD_MODES.has(mode); });
+    document.getElementById('detour-section').style.display = anyRoad ? 'block' : 'none';
+    if (!anyRoad) document.getElementById('chk-detours').checked = false;
 }
 
 function toggleReturn() {
@@ -555,6 +580,7 @@ function addHidden(parent, name, value) {
 document.addEventListener('DOMContentLoaded', () => {
     buildRouteUI();
     document.getElementById('inp-pax').addEventListener('input', updatePreview);
+    updateDetourVisibility();
 });
 </script>
 
