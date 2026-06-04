@@ -253,6 +253,34 @@ function haversine(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// Returns a Promise<km> using live routing for road/transit, Haversine for flight/ferry.
+function getRouteDistanceKm(from, to, mode) {
+    const straightLine = haversine(from.lat, from.lng, to.lat, to.lng);
+    if (!directionsService || mode.startsWith('Flight') || mode.startsWith('Ferry'))
+        return Promise.resolve(straightLine);
+
+    const isRoad = ROAD_MODES.has(mode);
+    const request = {
+        origin:      new google.maps.LatLng(from.lat, from.lng),
+        destination: new google.maps.LatLng(to.lat, to.lng),
+        travelMode:  isRoad ? google.maps.TravelMode.DRIVING : google.maps.TravelMode.TRANSIT,
+    };
+    if (isRoad) {
+        request.drivingOptions = {
+            departureTime: new Date(),
+            trafficModel:  google.maps.TrafficModel.BEST_GUESS,
+        };
+    }
+    return new Promise(resolve => {
+        directionsService.route(request, (result, status) => {
+            if (status === 'OK' && result.routes[0]?.legs[0]?.distance)
+                resolve(result.routes[0].legs[0].distance.value / 1000);
+            else
+                resolve(straightLine);
+        });
+    });
+}
+
 function splitMode(combined) {
     for (const cls of ['Economy','Business','First','Standard','Premium']) {
         if (combined.endsWith('-' + cls))
@@ -261,14 +289,16 @@ function splitMode(combined) {
     return { mode: combined, travelClass: 'Economy' };
 }
 
-let stopValues     = ['', ''];
-let stopPlaces     = [null, null];
-let legModeValues  = ['Train-National'];
-let stopInputEls   = [];
-let mapsReady      = false;
-let mapInstance    = null;
-let mapMarkers     = [];
-let mapPolyline    = null;
+let stopValues       = ['', ''];
+let stopPlaces       = [null, null];
+let legModeValues    = ['Train-National'];
+let stopInputEls     = [];
+let mapsReady        = false;
+let mapInstance      = null;
+let mapMarkers       = [];
+let mapPolyline      = null;
+let directionsService  = null;
+let directionsRenderer = null;
 
 const MODE_OPTIONS = `
 <optgroup label="Flights">
@@ -414,6 +444,12 @@ function initGoogleMap() {
         zoomControl: true,
         zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
     });
+    directionsService  = new google.maps.DirectionsService();
+    directionsRenderer = new google.maps.DirectionsRenderer({
+        suppressMarkers: true,
+        polylineOptions: { strokeColor: '#5C7A5A', strokeOpacity: .75, strokeWeight: 2 }
+    });
+    directionsRenderer.setMap(mapInstance);
     stopInputEls.forEach((_, i) => bindAutocomplete(i));
 }
 
@@ -440,6 +476,7 @@ function drawMap(coords) {
     if (!mapInstance || coords.length < 2) return;
     mapMarkers.forEach(m => m.setMap(null)); mapMarkers = [];
     if (mapPolyline) { mapPolyline.setMap(null); mapPolyline = null; }
+    if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
     const bounds = new google.maps.LatLngBounds();
     const dotIcon = (color, scale) => ({
         path: google.maps.SymbolPath.CIRCLE,
@@ -461,29 +498,34 @@ function drawMap(coords) {
     mapInstance.fitBounds(bounds, { top:40, right:40, bottom:40, left:40 });
 }
 
-function updatePreview() {
+async function updatePreview() {
     const pax = Math.max(1, parseInt(document.getElementById('inp-pax')?.value) || 1);
     const N   = stopValues.length;
     const coords = [];
     for (let i = 0; i < N; i++) {
         if (stopPlaces[i]) coords.push({ lat: stopPlaces[i].lat, lng: stopPlaces[i].lng });
     }
-    if (coords.length >= 2) drawMap(coords);
-    const legs = [];
+
+    updateDetourVisibility();
+
+    const legPromises = [];
     for (let i = 0; i < N - 1; i++) {
         const from = stopPlaces[i], to = stopPlaces[i + 1];
-        if (!from || !to) { legs.push(null); continue; }
-        const dist = haversine(from.lat, from.lng, to.lat, to.lng);
+        if (!from || !to) { legPromises.push(Promise.resolve(null)); continue; }
         const { mode, travelClass } = splitMode(legModeValues[i] || 'Train-National');
-        const factor = getFactor(mode, travelClass);
-        const kg     = factor * dist * pax;
-        legs.push({
-            fromLabel: stopValues[i].split(',')[0],
-            toLabel:   stopValues[i+1].split(',')[0],
-            dist, mode, kg
-        });
+        legPromises.push(
+            getRouteDistanceKm(from, to, mode).then(dist => ({
+                fromLabel: stopValues[i].split(',')[0],
+                toLabel:   stopValues[i+1].split(',')[0],
+                from, to, dist, mode, travelClass,
+                kg: getFactor(mode, travelClass) * dist * pax
+            }))
+        );
     }
+
+    const legs  = await Promise.all(legPromises);
     const valid = legs.filter(Boolean);
+
     if (!valid.length) {
         document.getElementById('prev-co2').textContent  = '—';
         document.getElementById('prev-dist').textContent = '—';
@@ -492,14 +534,38 @@ function updatePreview() {
         document.getElementById('prev-legs').style.display = 'none';
         return;
     }
+
+    // Map: use DirectionsRenderer for a single road/transit leg; polyline otherwise.
+    const singleLeg = valid.length === 1 ? valid[0] : null;
+    if (singleLeg && directionsService &&
+        (ROAD_MODES.has(singleLeg.mode) || singleLeg.mode.startsWith('Train'))) {
+        const isRoad = ROAD_MODES.has(singleLeg.mode);
+        const req = {
+            origin:      new google.maps.LatLng(singleLeg.from.lat, singleLeg.from.lng),
+            destination: new google.maps.LatLng(singleLeg.to.lat,   singleLeg.to.lng),
+            travelMode:  isRoad ? google.maps.TravelMode.DRIVING : google.maps.TravelMode.TRANSIT,
+        };
+        if (isRoad) req.drivingOptions = { departureTime: new Date(), trafficModel: google.maps.TrafficModel.BEST_GUESS };
+        document.getElementById('lt-map-placeholder').style.display = 'none';
+        document.getElementById('lt-map').style.display = 'block';
+        mapMarkers.forEach(m => m.setMap(null)); mapMarkers = [];
+        if (mapPolyline) { mapPolyline.setMap(null); mapPolyline = null; }
+        directionsService.route(req, (result, status) => {
+            if (status === 'OK') directionsRenderer.setDirections(result);
+            else if (coords.length >= 2) drawMap(coords);
+        });
+    } else if (coords.length >= 2) {
+        drawMap(coords);
+    }
+
     const totalKg   = valid.reduce((s, l) => s + l.kg, 0);
     const totalDist = valid.reduce((s, l) => s + l.dist, 0);
     const domMode   = valid.slice().sort((a, b) => b.dist - a.dist)[0].mode;
     document.getElementById('prev-co2').textContent  = totalKg.toFixed(2);
-    document.getElementById('prev-dist').textContent = totalDist.toFixed(0) + ' km';
+    document.getElementById('prev-dist').textContent = totalDist.toFixed(1) + ' km';
     document.getElementById('prev-mode').textContent = domMode;
     document.getElementById('prev-pax').textContent  = pax;
-    updateDetourVisibility();
+
     const legsEl = document.getElementById('prev-legs');
     if (valid.length > 1) {
         legsEl.style.display = 'block';
