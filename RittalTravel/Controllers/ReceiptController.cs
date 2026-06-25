@@ -32,7 +32,9 @@ public class ReceiptController : Controller
                 (r.Origin != null && r.Origin.ToLower().Contains(s)) ||
                 (r.Destination != null && r.Destination.ToLower().Contains(s)) ||
                 (r.OriginalFileName.ToLower().Contains(s)) ||
-                (r.TransportMode != null && r.TransportMode.ToLower().Contains(s)));
+                (r.TransportMode != null && r.TransportMode.ToLower().Contains(s)) ||
+                (r.DocumentType != null && r.DocumentType.ToLower().Contains(s)) ||
+                (r.Notes != null && r.Notes.ToLower().Contains(s)));
         }
 
         var receipts = await query.OrderByDescending(r => r.UploadedAt).ToListAsync();
@@ -42,7 +44,7 @@ public class ReceiptController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Upload(IFormFile? file, string? notes)
+    public async Task<IActionResult> Upload(IFormFile? file, string? notes, string? documentType)
     {
         if (file == null || file.Length == 0)
             return Json(new { success = false, error = "No file received." });
@@ -80,6 +82,7 @@ public class ReceiptController : Controller
                 TripDate         = parsed?.TripDate,
                 TransportMode    = parsed?.TransportMode,
                 Notes            = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                DocumentType     = string.IsNullOrWhiteSpace(documentType) ? null : documentType.Trim(),
             };
 
             _db.Receipts.Add(receipt);

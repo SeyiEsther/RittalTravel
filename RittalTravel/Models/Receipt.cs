@@ -14,4 +14,5 @@ public class Receipt
     public string? TripDate { get; set; }
     public string? TransportMode { get; set; }
     public string? Notes { get; set; }
+    public string? DocumentType { get; set; }
 }

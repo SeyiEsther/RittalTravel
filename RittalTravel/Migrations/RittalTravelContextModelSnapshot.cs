@@ -38,6 +38,7 @@ namespace RittalTravel.Migrations
                 b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
                 SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                 b.Property<string>("Destination").HasColumnType("nvarchar(max)");
+                b.Property<string>("DocumentType").HasColumnType("nvarchar(max)");
                 b.Property<string>("FileName").IsRequired().HasColumnType("nvarchar(max)");
                 b.Property<string>("Notes").HasColumnType("nvarchar(max)");
                 b.Property<string>("Origin").HasColumnType("nvarchar(max)");
