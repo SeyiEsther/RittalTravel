@@ -18,13 +18,6 @@
 4. Set application pool to No Managed Code
 5. Ensure SQL Server allows connections from the IIS server
 
-## Default Logins
-Admin: admin@rittal.co.uk / RittalTravel2025!
-Viewer: viewer@rittal.co.uk / ViewOnly2025!
-
-## Adding New Users
-Currently seeded manually. User management page coming in next version.
-
 ## Reset Seed Data
 Delete all rows from Trips table in SSMS and restart the app.
 
