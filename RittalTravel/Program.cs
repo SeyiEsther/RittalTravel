@@ -54,8 +54,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        logger.LogCritical(ex, "Database migration failed. Application cannot start.");
-        throw;
+        logger.LogWarning(ex, "Database migration failed — app will still start.");
     }
 }
 

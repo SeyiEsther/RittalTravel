@@ -1,11 +1,9 @@
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using RittalTravel.Models;
 
 namespace RittalTravel.Data;
 
-public class RittalTravelContext : IdentityDbContext<IdentityUser>
+public class RittalTravelContext : DbContext
 {
     public RittalTravelContext(DbContextOptions<RittalTravelContext> options)
         : base(options) { }
