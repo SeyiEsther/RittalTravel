@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
@@ -8,7 +7,6 @@ using RittalTravel.Services;
 
 namespace RittalTravel.Controllers;
 
-[Authorize]
 public class TripController : Controller
 {
     private readonly RittalTravelContext _db;
@@ -44,14 +42,12 @@ public class TripController : Controller
     }
 
     [HttpGet]
-    [Authorize(Roles = "Admin")]
     public IActionResult LogTrip()
     {
         return View(new Trip { TripDate = DateTime.Today, Passengers = 1, LoggedBy = User.Identity?.Name ?? "" });
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> LogTrip(Trip trip, List<WaypointEntry>? waypoints,
         bool returnTrip = false, bool differentReturn = false,
@@ -138,7 +134,6 @@ public class TripController : Controller
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
     {

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
@@ -9,7 +8,6 @@ using RittalTravel.Models;
 
 namespace RittalTravel.Controllers;
 
-[Authorize(Roles = "Admin")]
 public class ReportController : Controller
 {
     private readonly RittalTravelContext _db;

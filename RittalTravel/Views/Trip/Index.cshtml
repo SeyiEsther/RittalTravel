@@ -12,7 +12,7 @@
         <h1 class="rt-page-title">Business Travel Audit Trail</h1>
         <span class="rt-defra-badge">DEFRA 2025</span>
     </div>
-    @if (User.IsInRole("Admin")) { <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">+ Log Trip</a> }
+    <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">+ Log Trip</a>
 </div>
 
 @if (TempData["Success"] != null) { <div class="rt-alert rt-alert-success">@TempData["Success"]</div> }
@@ -33,7 +33,7 @@
             <th class="rt-text-right">Dist km</th><th class="rt-text-right">DEFRA Factor</th>
             <th>Formula</th><th class="rt-text-right">kgCO2e</th>
             <th>Methodology</th><th>Purpose</th>
-            @if (User.IsInRole("Admin")) { <th>Actions</th> }
+            <th>Actions</th>
         </tr></thead>
         <tbody>
         @foreach (var trip in Model) {
@@ -48,15 +48,13 @@
                 <td class="rt-text-right rt-mono">@trip.KgCO2e.ToString("F3")</td>
                 <td class="rt-small">@trip.DistanceMethodology</td>
                 <td class="rt-small">@trip.Purpose</td>
-                @if (User.IsInRole("Admin")) {
-                    <td>
-                        <form asp-action="Delete" asp-route-id="@trip.Id" method="post"
-                              onsubmit="return confirm('Delete trip for @Html.Raw(trip.TravellerName.Replace("'","\\'"))? This cannot be undone.')">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="rt-btn rt-btn-danger rt-btn-sm">Delete</button>
-                        </form>
-                    </td>
-                }
+                <td>
+                    <form asp-action="Delete" asp-route-id="@trip.Id" method="post"
+                          onsubmit="return confirm('Delete trip for @Html.Raw(trip.TravellerName.Replace("'","\\'"))? This cannot be undone.')">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="rt-btn rt-btn-danger rt-btn-sm">Delete</button>
+                    </form>
+                </td>
             </tr>
         }
         </tbody>
@@ -64,7 +62,7 @@
 } else {
     <div class="rt-empty-state">
         <p>No trips have been logged yet.</p>
-        @if (User.IsInRole("Admin")) { <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">Log Your First Trip</a> }
+        <a asp-controller="Trip" asp-action="LogTrip" class="rt-btn rt-btn-red">Log Your First Trip</a>
     </div>
 }
 </div>

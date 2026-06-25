@@ -8,32 +8,19 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-@if (User.Identity?.IsAuthenticated == true)
-{
-    <nav class="rt-nav">
-        <div class="rt-nav-inner">
-            <a class="rt-wordmark" asp-controller="Dashboard" asp-action="Index">
-                <span class="rt-word-rittal">Rittal</span><span class="rt-word-travel">Travel</span>
-            </a>
-            <ul class="rt-nav-links">
-                <li><a asp-controller="Dashboard" asp-action="Index">Dashboard</a></li>
-                <li><a asp-controller="Trip" asp-action="Index">Trip Log</a></li>
-                @if (User.IsInRole("Admin"))
-                {
-                    <li><a asp-controller="Trip" asp-action="LogTrip">Log Trip</a></li>
-                    <li><a asp-controller="Report" asp-action="Generate">Download Report</a></li>
-                }
-            </ul>
-            <div class="rt-nav-user">
-                <span class="rt-user-name">@User.Identity.Name</span>
-                <form asp-controller="Account" asp-action="Logout" method="post" style="display:inline">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="rt-logout-btn">Logout</button>
-                </form>
-            </div>
-        </div>
-    </nav>
-}
+<nav class="rt-nav">
+    <div class="rt-nav-inner">
+        <a class="rt-wordmark" asp-controller="Dashboard" asp-action="Index">
+            <span class="rt-word-rittal">Rittal</span><span class="rt-word-travel">Travel</span>
+        </a>
+        <ul class="rt-nav-links">
+            <li><a asp-controller="Dashboard" asp-action="Index">Dashboard</a></li>
+            <li><a asp-controller="Trip" asp-action="Index">Trip Log</a></li>
+            <li><a asp-controller="Trip" asp-action="LogTrip">Log Trip</a></li>
+            <li><a asp-controller="Report" asp-action="Generate">Download Report</a></li>
+        </ul>
+    </div>
+</nav>
 <main class="rt-main">
     @RenderBody()
 </main>

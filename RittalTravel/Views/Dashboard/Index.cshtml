@@ -6,9 +6,7 @@
         <h1 class="rt-page-title">Dashboard</h1>
         <p class="rt-page-sub">Rittal UK &mdash; Business Travel Carbon &mdash; @Model.CurrentYear</p>
     </div>
-    @if (User.IsInRole("Admin")) {
-        <a asp-controller="Report" asp-action="Generate" class="rt-btn rt-btn-red">Download PDF Report</a>
-    }
+    <a asp-controller="Report" asp-action="Generate" class="rt-btn rt-btn-red">Download PDF Report</a>
 </div>
 
 @if (TempData["Success"] != null) { <div class="rt-alert rt-alert-success">@TempData["Success"]</div> }
