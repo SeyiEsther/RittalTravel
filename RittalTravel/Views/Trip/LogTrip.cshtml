@@ -60,6 +60,7 @@
         <input type="hidden" asp-for="Destination"   id="fld-destination" />
         <input type="hidden" asp-for="TransportMode" id="fld-mode" />
         <input type="hidden" asp-for="TravelClass"   id="fld-class" />
+        <input type="hidden" name="receiptFileName"  id="fld-receipt" />
         <!-- Waypoint hidden inputs injected here on submit -->
         <div id="waypoints-container"></div>
 
@@ -67,6 +68,20 @@
 
             <!-- Left: Form -->
             <div class="lt-form-col">
+
+                <!-- Receipt Upload -->
+                <div class="lt-section">
+                    <div class="lt-section-title">Upload Receipt <span class="lt-optional">(optional — auto-fills fields below)</span></div>
+                    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+                        <label class="lt-btn-cancel" style="cursor:pointer;margin:0" for="receipt-file-input">
+                            Choose file
+                        </label>
+                        <input type="file" id="receipt-file-input" accept=".pdf,.jpg,.jpeg,.png"
+                               style="display:none" onchange="handleReceiptFile(this)" />
+                        <span id="receipt-file-name" style="font-size:.8125rem;color:var(--txm)">No file chosen</span>
+                    </div>
+                    <div id="receipt-status" style="margin-top:.5rem;font-size:.8125rem"></div>
+                </div>
 
                 <!-- Traveller Details -->
                 <div class="lt-section">
@@ -648,6 +663,67 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('inp-pax').addEventListener('input', updatePreview);
     updateDetourVisibility();
 });
+
+async function handleReceiptFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('receipt-file-name').textContent = file.name;
+    const status = document.getElementById('receipt-status');
+    status.style.color = 'var(--txm)';
+    status.textContent = 'Uploading and reading receipt…';
+
+    const fd = new FormData();
+    fd.append('receipt', file);
+    fd.append('__RequestVerificationToken',
+        document.querySelector('input[name="__RequestVerificationToken"]').value);
+
+    try {
+        const res = await fetch('/Trip/ParseReceipt', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!data.success) { status.style.color = '#f85149'; status.textContent = data.error || 'Parse failed.'; return; }
+
+        document.getElementById('fld-receipt').value = data.fileName;
+
+        const p = data.parsed || {};
+        let filled = [];
+
+        if (p.travellerName) {
+            const inp = document.querySelector('input[name="TravellerName"]');
+            if (inp && !inp.value) { inp.value = p.travellerName; filled.push('name'); }
+        }
+        if (p.tripDate) {
+            const inp = document.querySelector('input[name="TripDate"]');
+            if (inp && !inp.value) { inp.value = p.tripDate; filled.push('date'); }
+        }
+        if (p.passengers) {
+            const inp = document.getElementById('inp-pax');
+            if (inp && inp.value == '1') { inp.value = p.passengers; filled.push('passengers'); }
+        }
+        if (p.origin) {
+            stopValues[0] = p.origin; stopPlaces[0] = null; filled.push('origin');
+        }
+        if (p.destination) {
+            const last = stopValues.length - 1;
+            stopValues[last] = p.destination; stopPlaces[last] = null; filled.push('destination');
+        }
+        if (p.origin || p.destination) buildRouteUI();
+
+        if (p.transportMode) {
+            const combined = p.travelClass ? p.transportMode + '-' + p.travelClass : p.transportMode;
+            legModeValues = legModeValues.map(() => combined);
+            buildRouteUI();
+            filled.push('transport mode');
+        }
+
+        status.style.color = '#3fb950';
+        status.textContent = filled.length
+            ? 'Extracted: ' + filled.join(', ') + '. Review and correct before saving.'
+            : 'File stored. No fields could be extracted — fill in manually.';
+    } catch {
+        status.style.color = '#f85149';
+        status.textContent = 'Upload failed. Check your connection and try again.';
+    }
+}
 </script>
 
 @if (!string.IsNullOrEmpty(mapsKey))

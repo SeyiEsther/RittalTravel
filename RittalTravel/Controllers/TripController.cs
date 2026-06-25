@@ -11,11 +11,71 @@ public class TripController : Controller
 {
     private readonly RittalTravelContext _db;
     private readonly GoogleMapsService _maps;
+    private readonly ReceiptParserService _parser;
+    private readonly IWebHostEnvironment _env;
     private readonly ILogger<TripController> _logger;
 
-    public TripController(RittalTravelContext db, GoogleMapsService maps, ILogger<TripController> logger)
+    public TripController(RittalTravelContext db, GoogleMapsService maps,
+        ReceiptParserService parser, IWebHostEnvironment env, ILogger<TripController> logger)
     {
-        _db = db; _maps = maps; _logger = logger;
+        _db = db; _maps = maps; _parser = parser; _env = env; _logger = logger;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ParseReceipt(IFormFile? receipt)
+    {
+        if (receipt == null || receipt.Length == 0)
+            return Json(new { success = false, error = "No file received." });
+
+        var ext = Path.GetExtension(receipt.FileName).ToLowerInvariant();
+        if (ext is not (".pdf" or ".jpg" or ".jpeg" or ".png"))
+            return Json(new { success = false, error = "Only PDF, JPG and PNG files are supported." });
+
+        try
+        {
+            var uploadsDir = Path.Combine(_env.ContentRootPath, "Uploads");
+            Directory.CreateDirectory(uploadsDir);
+            var fileName = Guid.NewGuid() + ext;
+            var filePath = Path.Combine(uploadsDir, fileName);
+
+            await using (var fs = new FileStream(filePath, FileMode.Create))
+                await receipt.CopyToAsync(fs);
+
+            ParsedReceiptData? parsed = null;
+            if (ext == ".pdf")
+            {
+                await using var fs = System.IO.File.OpenRead(filePath);
+                parsed = _parser.ParsePdf(fs);
+            }
+
+            return Json(new { success = true, fileName, parsed });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Receipt parse failed");
+            return Json(new { success = false, error = "Could not process file." });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DownloadReceipt(int id)
+    {
+        var trip = await _db.Trips.FindAsync(id);
+        if (trip?.ReceiptFileName == null) return NotFound();
+
+        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", trip.ReceiptFileName);
+        if (!System.IO.File.Exists(filePath)) return NotFound();
+
+        var ext = Path.GetExtension(trip.ReceiptFileName).ToLowerInvariant();
+        var contentType = ext switch
+        {
+            ".pdf"          => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png"          => "image/png",
+            _               => "application/octet-stream"
+        };
+        var downloadName = $"Receipt-{trip.TravellerName.Replace(" ", "_")}-{trip.TripDate:yyyy-MM-dd}{ext}";
+        return PhysicalFile(filePath, contentType, downloadName);
     }
 
     [HttpGet]
@@ -52,11 +112,12 @@ public class TripController : Controller
     public async Task<IActionResult> LogTrip(Trip trip, List<WaypointEntry>? waypoints,
         bool returnTrip = false, bool differentReturn = false,
         string? returnOrigin = null, string? returnDestination = null,
-        bool accountForDetours = false)
+        bool accountForDetours = false, string? receiptFileName = null)
     {
         foreach (var f in new[] { nameof(Trip.DistanceKm), nameof(Trip.EmissionFactor), nameof(Trip.KgCO2e),
             nameof(Trip.Formula), nameof(Trip.DistanceMethodology), nameof(Trip.DefraFactorYear),
-            nameof(Trip.OrganisationId), nameof(Trip.Organisation), nameof(Trip.CreatedAt), nameof(Trip.LoggedBy), nameof(Trip.Id) })
+            nameof(Trip.OrganisationId), nameof(Trip.Organisation), nameof(Trip.CreatedAt), nameof(Trip.LoggedBy),
+            nameof(Trip.Id), nameof(Trip.ReceiptFileName) })
             ModelState.Remove(f);
 
         if (!ModelState.IsValid) return View(trip);
@@ -119,6 +180,7 @@ public class TripController : Controller
             trip.OrganisationId      = 1;
             trip.LoggedBy            = User.Identity?.Name ?? "";
             trip.CreatedAt           = DateTime.UtcNow;
+            trip.ReceiptFileName     = receiptFileName;
 
             _db.Trips.Add(trip);
             await _db.SaveChangesAsync();

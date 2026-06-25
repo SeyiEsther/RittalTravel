@@ -139,6 +139,7 @@ namespace RittalTravel.Migrations
                 b.Property<int>("OrganisationId").HasColumnType("int");
                 b.Property<int>("Passengers").HasColumnType("int");
                 b.Property<string>("Purpose").HasColumnType("nvarchar(max)");
+                b.Property<string>("ReceiptFileName").HasColumnType("nvarchar(max)");
                 b.Property<DateTime>("TripDate").HasColumnType("datetime2");
                 b.Property<string>("TravelClass").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
                 b.Property<string>("TravellerName").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");

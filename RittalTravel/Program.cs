@@ -18,6 +18,8 @@ builder.Services.AddDbContext<RittalTravelContext>(options =>
 
 builder.Services.AddHttpClient<OsrmRoutingService>(c => c.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddHttpClient<GoogleMapsService>(c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddScoped<ReceiptParserService>();
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 20 * 1024 * 1024);
 
 builder.Services.AddSession(options =>
 {

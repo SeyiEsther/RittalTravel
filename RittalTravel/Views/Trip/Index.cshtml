@@ -33,7 +33,7 @@
             <th class="rt-text-right">Dist km</th><th class="rt-text-right">DEFRA Factor</th>
             <th>Formula</th><th class="rt-text-right">kgCO2e</th>
             <th>Methodology</th><th>Purpose</th>
-            <th>Actions</th>
+            <th>Receipt</th><th>Actions</th>
         </tr></thead>
         <tbody>
         @foreach (var trip in Model) {
@@ -48,6 +48,13 @@
                 <td class="rt-text-right rt-mono">@trip.KgCO2e.ToString("F3")</td>
                 <td class="rt-small">@trip.DistanceMethodology</td>
                 <td class="rt-small">@trip.Purpose</td>
+                <td>
+                    @if (trip.ReceiptFileName != null)
+                    {
+                        <a asp-action="DownloadReceipt" asp-route-id="@trip.Id"
+                           class="rt-link" style="font-size:.75rem" title="Download receipt">&#128196; Receipt</a>
+                    }
+                </td>
                 <td>
                     <form asp-action="Delete" asp-route-id="@trip.Id" method="post"
                           onsubmit="return confirm('Delete trip for @Html.Raw(trip.TravellerName.Replace("'","\\'"))? This cannot be undone.')">

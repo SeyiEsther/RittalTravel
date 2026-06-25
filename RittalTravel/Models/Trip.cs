@@ -32,6 +32,7 @@ public class Trip
     public string? Purpose { get; set; }
     public string LoggedBy { get; set; } = "";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? ReceiptFileName { get; set; }
 
     public Organisation Organisation { get; set; } = null!;
 }
