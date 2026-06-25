@@ -97,6 +97,10 @@ public class TripController : Controller
         {
             _logger.LogError(ex, "Trip log load failed");
             TempData["Error"] = "Could not load trip log. Please try again.";
+            ViewBag.TotalTco2e       = 0.0;
+            ViewBag.TotalTrips       = 0;
+            ViewBag.UniqueTravellers = 0;
+            ViewBag.CurrentYear      = DateTime.Now.Year;
             return View(new List<Trip>());
         }
     }
