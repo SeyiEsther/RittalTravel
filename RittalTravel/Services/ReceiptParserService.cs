@@ -1,7 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using iText.Kernel.Pdf;
-using iText.Kernel.Pdf.Canvas.Parser;
 
 namespace RittalTravel.Services;
 
@@ -23,17 +21,47 @@ public class ReceiptParserService
     {
         try
         {
-            var sb = new StringBuilder();
-            using var reader = new PdfReader(stream);
-            using var doc = new iText.Kernel.Pdf.PdfDocument(reader);
-            for (int i = 1; i <= doc.GetNumberOfPages(); i++)
-                sb.AppendLine(PdfTextExtractor.GetTextFromPage(doc.GetPage(i)));
-            return ParseText(sb.ToString());
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            var text = ExtractPdfText(ms.ToArray());
+            return ParseText(text);
         }
         catch
         {
             return new ParsedReceiptData();
         }
+    }
+
+    private static string ExtractPdfText(byte[] bytes)
+    {
+        // Scan raw PDF content streams for text operators (Tj and TJ).
+        // Works well for text-based PDFs (e-tickets, booking confirmations).
+        var raw = Encoding.Latin1.GetString(bytes);
+        var sb = new StringBuilder();
+
+        // Simple Tj: (some text) Tj
+        foreach (Match m in Regex.Matches(raw, @"\(([^)]{1,300})\)\s*Tj"))
+            sb.AppendLine(SanitisePdfString(m.Groups[1].Value));
+
+        // Array TJ: [(text1) kern (text2) ...] TJ
+        foreach (Match m in Regex.Matches(raw, @"\[([^\]]{1,1000})\]\s*TJ"))
+        {
+            foreach (Match part in Regex.Matches(m.Groups[1].Value, @"\(([^)]{1,300})\)"))
+                sb.Append(SanitisePdfString(part.Groups[1].Value)).Append(' ');
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private static string SanitisePdfString(string s)
+    {
+        s = Regex.Replace(s, @"\\[0-7]{1,3}", m =>
+        {
+            try { return ((char)Convert.ToInt32(m.Value[1..], 8)).ToString(); } catch { return " "; }
+        });
+        s = Regex.Replace(s, @"\\.", " ");
+        return new string(s.Where(c => c is >= ' ' and <= '~').ToArray());
     }
 
     public ParsedReceiptData ParseText(string text)
