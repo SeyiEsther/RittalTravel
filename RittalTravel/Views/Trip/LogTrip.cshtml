@@ -668,8 +668,8 @@ async function handleReceiptFile(input) {
 
     const fd = new FormData();
     fd.append('receipt', file);
-    fd.append('__RequestVerificationToken',
-        document.querySelector('input[name="__RequestVerificationToken"]').value);
+    const csrfToken = document.querySelector('input[name="__RequestVerificationToken"]');
+    if (csrfToken) fd.append('__RequestVerificationToken', csrfToken.value);
 
     try {
         const res = await fetch('/Trip/ParseReceipt', { method: 'POST', body: fd });

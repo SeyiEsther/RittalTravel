@@ -22,6 +22,7 @@ public class TripController : Controller
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> ParseReceipt(IFormFile? receipt)
     {
         if (receipt == null || receipt.Length == 0)
@@ -63,10 +64,12 @@ public class TripController : Controller
         var trip = await _db.Trips.FindAsync(id);
         if (trip?.ReceiptFileName == null) return NotFound();
 
-        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", trip.ReceiptFileName);
+        var safeFileName = Path.GetFileName(trip.ReceiptFileName);
+        if (string.IsNullOrEmpty(safeFileName)) return NotFound();
+        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", safeFileName);
         if (!System.IO.File.Exists(filePath)) return NotFound();
 
-        var ext = Path.GetExtension(trip.ReceiptFileName).ToLowerInvariant();
+        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
         var contentType = ext switch
         {
             ".pdf"          => "application/pdf",

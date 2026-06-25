@@ -1,10 +1,10 @@
 @model List<RittalTravel.Models.Trip>
 @{
     ViewData["Title"] = "Trip Log";
-    double totalTco2e    = ViewBag.TotalTco2e;
-    int totalTrips       = ViewBag.TotalTrips;
-    int uniqueTravellers = ViewBag.UniqueTravellers;
-    int currentYear      = ViewBag.CurrentYear;
+    double totalTco2e    = ViewBag.TotalTco2e    ?? 0.0;
+    int totalTrips       = ViewBag.TotalTrips       ?? 0;
+    int uniqueTravellers = ViewBag.UniqueTravellers ?? 0;
+    int currentYear      = ViewBag.CurrentYear      ?? DateTime.Now.Year;
 }
 
 <div class="rt-page-header rt-flex-between">

@@ -103,10 +103,12 @@ public class ReceiptController : Controller
         var receipt = await _db.Receipts.FindAsync(id);
         if (receipt == null) return NotFound();
 
-        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", receipt.FileName);
+        var safeFileName = Path.GetFileName(receipt.FileName);
+        if (string.IsNullOrEmpty(safeFileName)) return NotFound();
+        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", safeFileName);
         if (!System.IO.File.Exists(filePath)) return NotFound();
 
-        var ext = Path.GetExtension(receipt.FileName).ToLowerInvariant();
+        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
         var contentType = ext switch
         {
             ".pdf"            => "application/pdf",
