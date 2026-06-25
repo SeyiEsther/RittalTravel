@@ -10,6 +10,7 @@ public class RittalTravelContext : DbContext
 
     public DbSet<Trip> Trips { get; set; } = null!;
     public DbSet<Organisation> Organisations { get; set; } = null!;
+    public DbSet<Receipt> Receipts { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
