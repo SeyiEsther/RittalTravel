@@ -150,3 +150,39 @@ select.rt-select option { background:var(--bg3);color:var(--tx); }
 .rt-login-wordmark .rt-word-travel { color:var(--lv); }
 .rt-login-subtitle { color:var(--txm);font-size:14px;margin:0; }
 .rt-login-footer { text-align:center;color:var(--txm);font-size:11px;margin-top:28px;line-height:1.6;opacity:.7; }
+
+/* DEFRA update warning banner */
+.rt-defra-banner {
+    background: #2e1f00;
+    border-bottom: 1px solid #7a5200;
+    color: #ffc94d;
+    padding: .6rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: .8125rem;
+    line-height: 1.5;
+}
+.rt-defra-banner strong { color: #ffd966; }
+.rt-defra-banner code {
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,201,77,.2);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: .75rem;
+    color: #ffd966;
+}
+.rt-defra-banner-close {
+    background: transparent;
+    border: 1px solid rgba(255,201,77,.35);
+    color: #ffc94d;
+    border-radius: 5px;
+    cursor: pointer;
+    padding: .25rem .65rem;
+    font-size: .8125rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background .15s;
+}
+.rt-defra-banner-close:hover { background: rgba(255,201,77,.12); }

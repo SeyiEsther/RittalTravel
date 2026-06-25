@@ -3,7 +3,10 @@
 @{
     ViewData["Title"] = "Log Trip";
     Layout = null;
-    var mapsKey = _cfg["GoogleMaps:ApiKey"] ?? "";
+    var mapsKey       = _cfg["GoogleMaps:ApiKey"] ?? "";
+    var defraYear     = _cfg["RittalTravel:DefraFactorYear"] ?? "DEFRA 2025";
+    var defraRevStr   = _cfg["RittalTravel:DefraReviewDate"] ?? "";
+    var showDefraBanner = DateTime.TryParse(defraRevStr, out var defraRevDate) && DateTime.Now >= defraRevDate;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -31,6 +34,22 @@
         </ul>
     </div>
 </nav>
+
+@if (showDefraBanner) {
+<div id="defra-banner" class="rt-defra-banner" style="display:none">
+    <span>
+        <strong>&#9888; @defraYear factors may be out of date.</strong>
+        DEFRA publishes updated GHG conversion factors each June/July.
+        Update <code>DefraCalculator.cs</code> and <code>appsettings.json</code>
+        then set <code>DefraReviewDate</code> to next year's review date.
+    </span>
+    <button class="rt-defra-banner-close"
+            onclick="this.closest('#defra-banner').style.display='none';sessionStorage.setItem('defraBannerDismissed','1')">
+        &times; Dismiss
+    </button>
+</div>
+<script>if(!sessionStorage.getItem('defraBannerDismissed'))document.getElementById('defra-banner').style.display='';</script>
+}
 
 <div class="lt-wrap">
     <div class="lt-header">

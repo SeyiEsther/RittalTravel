@@ -1,3 +1,9 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration _layoutCfg
+@{
+    var _defraYear       = _layoutCfg["RittalTravel:DefraFactorYear"] ?? "DEFRA 2025";
+    var _defraReviewStr  = _layoutCfg["RittalTravel:DefraReviewDate"] ?? "";
+    var _showDefraBanner = DateTime.TryParse(_defraReviewStr, out var _reviewDate) && DateTime.Now >= _reviewDate;
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,6 +28,21 @@
         </ul>
     </div>
 </nav>
+@if (_showDefraBanner) {
+<div id="defra-banner" class="rt-defra-banner" style="display:none">
+    <span>
+        <strong>&#9888; @_defraYear factors may be out of date.</strong>
+        DEFRA publishes updated GHG conversion factors each June/July.
+        Update <code>DefraCalculator.cs</code> and <code>appsettings.json</code>
+        then set <code>DefraReviewDate</code> to next year's review date.
+    </span>
+    <button class="rt-defra-banner-close"
+            onclick="this.closest('#defra-banner').style.display='none';sessionStorage.setItem('defraBannerDismissed','1')">
+        &times; Dismiss
+    </button>
+</div>
+<script>if(!sessionStorage.getItem('defraBannerDismissed'))document.getElementById('defra-banner').style.display='';</script>
+}
 <main class="rt-main">
     @RenderBody()
 </main>
