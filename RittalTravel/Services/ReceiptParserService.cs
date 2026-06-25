@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using UglyToad.PdfPig;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
 
 namespace RittalTravel.Services;
 
@@ -23,9 +24,10 @@ public class ReceiptParserService
         try
         {
             var sb = new StringBuilder();
-            using var doc = PdfDocument.Open(stream);
-            foreach (var page in doc.GetPages())
-                sb.Append(string.Join(" ", page.GetWords().Select(w => w.Text))).AppendLine();
+            using var reader = new PdfReader(stream);
+            using var doc = new iText.Kernel.Pdf.PdfDocument(reader);
+            for (int i = 1; i <= doc.GetNumberOfPages(); i++)
+                sb.AppendLine(PdfTextExtractor.GetTextFromPage(doc.GetPage(i)));
             return ParseText(sb.ToString());
         }
         catch
