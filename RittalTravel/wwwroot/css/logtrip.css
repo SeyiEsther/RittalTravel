@@ -219,6 +219,50 @@ body.lt-body { background: var(--bg); min-height: 100vh; }
     gap: .75rem;
     margin-top: 1rem;
 }
+.lt-receipt-extract {
+    margin-top: .75rem;
+    padding: .75rem .875rem;
+    border: 1px solid var(--bda);
+    border-radius: 6px;
+    background: rgba(92, 122, 90, .08);
+}
+.lt-receipt-extract-title {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--txm);
+    margin-bottom: .5rem;
+}
+.lt-receipt-extract-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .25rem .75rem;
+    margin: 0 0 .75rem;
+    font-size: .8125rem;
+}
+.lt-receipt-extract-list dt {
+    margin: 0;
+    color: var(--txm);
+}
+.lt-receipt-extract-list dd {
+    margin: 0;
+    color: var(--tx);
+}
+.lt-btn-apply-receipt {
+    display: inline-flex;
+    align-items: center;
+    padding: .4375rem .875rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--pri);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.lt-btn-apply-receipt:hover { background: var(--scd); }
+
 .lt-btn-cancel {
     background: transparent;
     color: var(--txm);
