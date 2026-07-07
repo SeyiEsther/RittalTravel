@@ -3,14 +3,13 @@
     ViewData["Title"] = "Receipts & Invoices";
     string search = ViewBag.Search ?? "";
 }
-<form id="csrf-holder" style="display:none">@Html.AntiForgeryToken()</form>
 
 <div class="rt-page-header rt-flex-between">
     <div>
         <h1 class="rt-page-title">Receipts &amp; Invoices</h1>
         <p class="rt-page-sub">Upload and search travel documents</p>
     </div>
-    <button class="rt-btn rt-btn-red" onclick="document.getElementById('upload-panel').classList.toggle('rl-hidden')">
+    <button type="button" class="rt-btn rt-btn-red" onclick="document.getElementById('upload-panel').classList.toggle('rl-hidden')">
         + Upload Document
     </button>
 </div>
@@ -21,51 +20,52 @@
 <!-- Upload Panel -->
 <div id="upload-panel" class="rt-card rl-mb rl-hidden">
     <h2 class="rt-card-title" style="margin-bottom:1rem">Upload Document</h2>
-    <div style="display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap">
+    <form asp-action="Upload" asp-controller="Receipt" method="post" enctype="multipart/form-data"
+          id="rl-upload-form" onsubmit="return rlOnSubmit()">
+        @Html.AntiForgeryToken()
+        <div class="rl-upload-row">
 
-        <div style="flex:0 0 auto">
-            <div class="rl-field-label">File (PDF, JPG, PNG)</div>
-            <label class="rt-btn rt-btn-outline" style="cursor:pointer;display:inline-block" for="rl-file-input">
-                Choose file
-            </label>
-            <input type="file" id="rl-file-input" accept=".pdf,.jpg,.jpeg,.png"
-                   style="display:none" onchange="rlFileChosen(this)" />
-            <span id="rl-file-name" class="rl-file-label">No file chosen</span>
-        </div>
+            <div class="rl-upload-field">
+                <div class="rl-field-label">File (PDF, JPG, PNG) <span class="rl-req">*</span></div>
+                <label class="rt-btn rt-btn-outline rl-file-btn" for="rl-file-input">Choose file</label>
+                <input type="file" id="rl-file-input" name="file" accept=".pdf,.jpg,.jpeg,.png,.PDF,.JPG,.JPEG,.PNG"
+                       required onchange="rlFileChosen(this)" />
+                <span id="rl-file-name" class="rl-file-label">No file chosen</span>
+            </div>
 
-        <div style="flex:0 0 130px">
-            <div class="rl-field-label">Document type</div>
-            <select id="rl-doc-type" class="rl-select">
-                <option value="">— Select —</option>
-                <option value="Receipt">Receipt</option>
-                <option value="Invoice">Invoice</option>
-                <option value="Ticket">Ticket / E-ticket</option>
-                <option value="Booking">Booking confirmation</option>
-                <option value="Other">Other</option>
-            </select>
-        </div>
+            <div class="rl-upload-field rl-upload-field--narrow">
+                <div class="rl-field-label">Document type</div>
+                <select id="rl-doc-type" name="documentType" class="rl-select">
+                    <option value="">— Select —</option>
+                    <option value="Receipt">Receipt</option>
+                    <option value="Invoice">Invoice</option>
+                    <option value="Ticket">Ticket / E-ticket</option>
+                    <option value="Booking">Booking confirmation</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
 
-        <div style="flex:2;min-width:200px">
-            <div class="rl-field-label">Notes <span style="opacity:.55">(optional)</span></div>
-            <input type="text" id="rl-notes" class="rl-input" placeholder="e.g. Q2 client visit" />
-        </div>
+            <div class="rl-upload-field rl-upload-field--grow">
+                <div class="rl-field-label">Notes <span class="rl-optional">(optional)</span></div>
+                <input type="text" id="rl-notes" name="notes" class="rl-input" placeholder="e.g. Q2 client visit" />
+            </div>
 
-        <div style="align-self:flex-end">
-            <button class="rt-btn rt-btn-red" onclick="rlUpload()" id="rl-upload-btn">Upload</button>
+            <div class="rl-upload-field rl-upload-field--action">
+                <button type="submit" class="rt-btn rt-btn-red" id="rl-upload-btn">Upload</button>
+            </div>
         </div>
-    </div>
-    <div id="rl-upload-status" style="margin-top:.75rem;font-size:.8125rem"></div>
+        <div id="rl-upload-status" class="rl-upload-status" aria-live="polite"></div>
+    </form>
 </div>
 
 <!-- Search -->
 <div class="rt-card rl-mb">
-    <form method="get" style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+    <form method="get" class="rl-search-form">
         <input type="text" name="search" value="@search" class="rl-input"
-               placeholder="Search by name, route, mode, type or filename…"
-               style="flex:1;min-width:220px" />
+               placeholder="Search by name, route, mode, type or filename…" />
         <button type="submit" class="rt-btn rt-btn-outline">Search</button>
         @if (!string.IsNullOrEmpty(search)) {
-            <a asp-action="Index" class="rt-link" style="font-size:.8125rem">Clear</a>
+            <a asp-action="Index" class="rt-link rl-clear-link">Clear</a>
         }
     </form>
 </div>
@@ -94,7 +94,7 @@
                         @if (r.DocumentType != null) {
                             <span class="rl-type-badge rl-type-@r.DocumentType.ToLower()">@r.DocumentType</span>
                         } else {
-                            <span style="color:var(--txm)">—</span>
+                            <span class="rl-muted">—</span>
                         }
                     </td>
                     <td class="rt-small">
@@ -105,9 +105,9 @@
                     <td>@(r.TravellerName ?? "—")</td>
                     <td class="rt-nowrap">
                         @if (r.Origin != null || r.Destination != null) {
-                            @(r.Origin ?? "?") <span>&rarr;</span> @(r.Destination ?? "?")
+                            @(r.Origin ?? "—") <span>&rarr;</span> @(r.Destination ?? "—")
                         } else {
-                            <span style="color:var(--txm)">—</span>
+                            <span class="rl-muted">—</span>
                         }
                     </td>
                     <td class="rt-mono">@(r.TripDate ?? "—")</td>
@@ -115,12 +115,12 @@
                         @if (r.TransportMode != null) {
                             <span class="rt-mode-badge rt-mode-@r.TransportMode.ToLower().Replace("-","").Replace(" ","")">@r.TransportMode</span>
                         } else {
-                            <span style="color:var(--txm)">—</span>
+                            <span class="rl-muted">—</span>
                         }
                     </td>
-                    <td class="rt-small" style="color:var(--txm)">@(r.Notes ?? "")</td>
+                    <td class="rt-small rl-muted">@(r.Notes ?? "")</td>
                     <td>
-                        <div style="display:flex;gap:.5rem;align-items:center">
+                        <div class="rl-actions">
                             <a asp-action="Download" asp-route-id="@r.Id"
                                class="rt-btn rt-btn-sm rt-btn-outline">Download</a>
                             <form asp-action="Delete" asp-route-id="@r.Id" method="post"
@@ -135,14 +135,14 @@
             </tbody>
         </table>
     </div>
-    <div style="font-size:.75rem;color:var(--txm);padding:.75rem 0 .25rem">
+    <div class="rl-result-count">
         @Model.Count document@(Model.Count == 1 ? "" : "s")@(string.IsNullOrEmpty(search) ? "" : $" matching \"{search}\"")
     </div>
 } else {
     <div class="rt-empty-state">
         @if (string.IsNullOrEmpty(search)) {
             <p>No documents uploaded yet.</p>
-            <button class="rt-btn rt-btn-red"
+            <button type="button" class="rt-btn rt-btn-red"
                     onclick="document.getElementById('upload-panel').classList.remove('rl-hidden');document.getElementById('rl-file-input').click()">
                 Upload Your First Document
             </button>
@@ -158,30 +158,56 @@
 <style>
 .rl-hidden  { display: none !important; }
 .rl-mb      { margin-bottom: 1rem; }
+.rl-muted   { color: var(--txm); }
+.rl-req     { color: #f85149; }
+.rl-optional { opacity: .55; }
 .rl-file-label { font-size:.8125rem; color:var(--txm); margin-left:.6rem; }
 .rl-field-label { font-size:.8125rem; color:var(--txm); margin-bottom:.35rem; }
+.rl-upload-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.rl-upload-field { flex: 0 0 auto; }
+.rl-upload-field--narrow { flex: 0 0 150px; min-width: 130px; }
+.rl-upload-field--grow { flex: 2; min-width: 200px; }
+.rl-upload-field--action { align-self: flex-end; }
+.rl-upload-status { margin-top: .75rem; font-size: .8125rem; color: var(--txm); }
+.rl-search-form { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+.rl-search-form .rl-input { flex: 1; min-width: 220px; }
+.rl-clear-link { font-size: .8125rem; }
+.rl-actions { display: flex; gap: .5rem; align-items: center; }
+.rl-result-count { font-size: .75rem; color: var(--txm); padding: .75rem 0 .25rem; }
 .rl-input, .rl-select {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    background: var(--bg3);
+    border: 1px solid var(--bd);
+    border-radius: 8px;
     color: var(--tx);
-    padding: .45rem .75rem;
+    padding: .55rem .75rem;
     font-size: .875rem;
     width: 100%;
+    font-family: inherit;
 }
-.rl-input:focus, .rl-select:focus { outline: none; border-color: var(--accent); }
+.rl-input:focus, .rl-select:focus {
+    outline: none;
+    border-color: var(--sc);
+    box-shadow: 0 0 0 2px rgba(92,122,90,.35);
+}
+.rl-file-btn { cursor: pointer; display: inline-block; }
+#rl-file-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 .rt-btn-outline {
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid var(--bd);
     color: var(--tx);
-    border-radius: 6px;
-    padding: .4rem .9rem;
+    border-radius: 8px;
+    padding: .55rem .9rem;
     font-size: .8125rem;
     cursor: pointer;
     text-decoration: none;
     display: inline-block;
 }
-.rt-btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.rt-btn-outline:hover { border-color: var(--sc); color: var(--sc); }
 .rl-type-badge {
     display: inline-block;
     font-size: .6875rem;
@@ -190,9 +216,9 @@
     text-transform: uppercase;
     padding: 2px 7px;
     border-radius: 4px;
-    background: var(--surface2);
+    background: var(--bg3);
     color: var(--txm);
-    border: 1px solid var(--border);
+    border: 1px solid var(--bd);
 }
 .rl-type-badge.rl-type-invoice  { background:#1a2e1a; color:#4caf50; border-color:#2e5c2e; }
 .rl-type-badge.rl-type-receipt  { background:#1a2430; color:#64b0e0; border-color:#1e4060; }
@@ -200,50 +226,27 @@
 .rl-type-badge.rl-type-booking  { background:#1e1430; color:#b07de0; border-color:#3c2860; }
 </style>
 <script>
-let rlSelectedFile = null;
-
 function rlFileChosen(input) {
-    rlSelectedFile = input.files[0] || null;
-    document.getElementById('rl-file-name').textContent = rlSelectedFile ? rlSelectedFile.name : 'No file chosen';
+    const file = input.files[0];
+    document.getElementById('rl-file-name').textContent = file ? file.name : 'No file chosen';
 }
 
-async function rlUpload() {
-    if (!rlSelectedFile) { alert('Please choose a file first.'); return; }
-    const status = document.getElementById('rl-upload-status');
-    const btn    = document.getElementById('rl-upload-btn');
-    status.style.color = 'var(--txm)';
-    status.textContent = 'Uploading…';
-    btn.disabled = true;
-
-    const token = document.querySelector('#csrf-holder input[name="__RequestVerificationToken"]');
-    const fd = new FormData();
-    fd.append('file', rlSelectedFile);
-    fd.append('notes', document.getElementById('rl-notes').value);
-    fd.append('documentType', document.getElementById('rl-doc-type').value);
-    if (token) fd.append('__RequestVerificationToken', token.value);
-
-    try {
-        const res  = await fetch('/Receipt/Upload', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (!data.success) {
-            status.style.color = '#f85149';
-            status.textContent = data.error || 'Upload failed.';
-            btn.disabled = false;
-            return;
-        }
-        status.style.color = '#3fb950';
-        const p = data.parsed || {};
-        const got = [p.travellerName && 'name', p.origin && 'origin', p.destination && 'destination',
-                     p.tripDate && 'date', p.transportMode && 'mode'].filter(Boolean);
-        status.textContent = got.length
-            ? 'Uploaded! Extracted: ' + got.join(', ') + '. Reloading…'
-            : 'Uploaded. Reloading…';
-        setTimeout(() => window.location.reload(), 800);
-    } catch {
-        status.style.color = '#f85149';
-        status.textContent = 'Upload failed. Check connection and try again.';
-        btn.disabled = false;
+function rlOnSubmit() {
+    const fileInput = document.getElementById('rl-file-input');
+    if (!fileInput.files || !fileInput.files.length) {
+        alert('Please choose a file first.');
+        return false;
     }
+    const btn = document.getElementById('rl-upload-btn');
+    const status = document.getElementById('rl-upload-status');
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+    status.textContent = 'Uploading your document…';
+    return true;
+}
+
+@if (TempData["Success"] != null || TempData["Error"] != null) {
+    @:document.getElementById('upload-panel')?.classList.remove('rl-hidden');
 }
 </script>
 }

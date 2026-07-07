@@ -48,14 +48,21 @@ public class ReceiptController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<IActionResult> Upload(IFormFile? file, string? notes, string? documentType)
     {
         if (file == null || file.Length == 0)
-            return Json(new { success = false, error = "No file received." });
+        {
+            TempData["Error"] = "No file was selected. Please choose a PDF, JPG, or PNG and try again.";
+            return RedirectToAction(nameof(Index));
+        }
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (ext is not (".pdf" or ".jpg" or ".jpeg" or ".png"))
-            return Json(new { success = false, error = "Only PDF, JPG and PNG files are supported." });
+        {
+            TempData["Error"] = "Only PDF, JPG and PNG files are supported.";
+            return RedirectToAction(nameof(Index));
+        }
 
         try
         {
@@ -92,12 +99,29 @@ public class ReceiptController : Controller
             _db.Receipts.Add(receipt);
             await _db.SaveChangesAsync();
 
-            return Json(new { success = true, id = receipt.Id, parsed });
+            var extracted = new List<string>();
+            if (parsed?.TravellerName != null) extracted.Add("name");
+            if (parsed?.Origin != null) extracted.Add("origin");
+            if (parsed?.Destination != null) extracted.Add("destination");
+            if (parsed?.TripDate != null) extracted.Add("date");
+            if (parsed?.TransportMode != null) extracted.Add("mode");
+
+            TempData["Success"] = extracted.Count > 0
+                ? $"\"{receipt.OriginalFileName}\" uploaded. Extracted: {string.Join(", ", extracted)}."
+                : $"\"{receipt.OriginalFileName}\" uploaded successfully.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Receipt upload failed — no write permission to Uploads folder");
+            TempData["Error"] = "Could not save the file. Ensure the app has write permission to the Uploads folder.";
+            return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Receipt upload failed");
-            return Json(new { success = false, error = "Could not process file." });
+            TempData["Error"] = "Could not upload the file. Please try again or contact IT support.";
+            return RedirectToAction(nameof(Index));
         }
     }
 

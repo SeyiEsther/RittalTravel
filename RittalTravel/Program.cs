@@ -10,6 +10,9 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("DefaultConnection not found.");
 
+builder.Services.AddAntiforgery(o => o.HeaderName = "RequestVerificationToken");
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+    o.MultipartBodyLengthLimit = 20 * 1024 * 1024);
 builder.Services.AddControllersWithViews().AddNewtonsoftJson();
 builder.Services.Configure<RittalTravelOptions>(
     builder.Configuration.GetSection(RittalTravelOptions.SectionName));
@@ -34,6 +37,8 @@ builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
 var app = builder.Build();
+
+Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "Uploads"));
 
 if (!app.Environment.IsDevelopment())
 {

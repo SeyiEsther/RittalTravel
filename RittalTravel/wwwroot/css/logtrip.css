@@ -81,6 +81,16 @@ body.lt-body { background: var(--bg); min-height: 100vh; }
 .lt-textarea { resize: vertical; }
 .lt-val-error { color: #f85149; font-size: .75rem; }
 
+/* Visually hidden but keyboard-accessible file input */
+.lt-file-input {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
 /* ── Route Builder ── */
 #route-builder { display: flex; flex-direction: column; }
 

@@ -27,6 +27,7 @@ public class TripController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<IActionResult> ParseReceipt(IFormFile? receipt)
     {
         if (receipt == null || receipt.Length == 0)
@@ -54,6 +55,11 @@ public class TripController : Controller
             }
 
             return Json(new { success = true, fileName, parsed });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Receipt parse failed — no write permission to Uploads folder");
+            return Json(new { success = false, error = "Could not save the file. Ensure the app can write to the Uploads folder." });
         }
         catch (Exception ex)
         {
