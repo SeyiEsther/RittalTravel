@@ -925,6 +925,16 @@ function showReceiptExtractPanel(parsed) {
     panel.style.display = hasAny || note ? 'block' : 'none';
 }
 
+function setRouteStop(idx, value) {
+    if (!value) return;
+    stopValues[idx] = value;
+    stopPlaces[idx] = null;
+    if (stopInputEls[idx]) {
+        stopInputEls[idx].value = value;
+        stopInputEls[idx].dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
 function applyParsedReceipt(p) {
     if (!p) return [];
     const filled = [];
@@ -965,6 +975,9 @@ function applyParsedReceipt(p) {
     }
 
     buildRouteUI();
+
+    if (origin) setRouteStop(0, origin);
+    if (dest) setRouteStop(stopValues.length - 1, dest);
 
     if (mode) {
         let finalCombined = toModeSelectValue(mode, cls);

@@ -140,7 +140,13 @@ public class ReceiptParserService
     }
 
     private static string NormaliseWhitespace(string text)
-        => Regex.Replace(text.Replace('\r', '\n'), @"[ \t]+", " ").Replace("\n ", "\n").Trim();
+    {
+        text = text.Replace('\r', '\n');
+        // PdfPig often glues words: "PriceHeathrow", "20262 xAdult"
+        text = Regex.Replace(text, @"([a-z])([A-Z])", "$1 $2");
+        text = Regex.Replace(text, @"(\d)([A-Za-z])", "$1 $2");
+        return Regex.Replace(text, @"[ \t]+", " ").Replace("\n ", "\n").Trim();
+    }
 
     public ParsedReceiptData ParseText(string text)
     {
@@ -257,13 +263,13 @@ public class ReceiptParserService
     private static bool IsPlausibleLocation(string s)
     {
         if (string.IsNullOrWhiteSpace(s) || s.Length < 2 || s.Length > 60) return false;
-        var lower = s.ToLowerInvariant();
+        var words = s.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         string[] reject =
         {
             "ticket", "receipt", "invoice", "booking", "reference", "passenger", "class",
             "standard", "date", "total", "amount", "payment", "card", "vat"
         };
-        return !reject.Any(r => lower.Contains(r));
+        return !words.Any(w => reject.Contains(w));
     }
 
     private static void ParseTrain(string text, string lower, ParsedReceiptData r)
@@ -433,8 +439,9 @@ public class ReceiptParserService
 
         var patterns = new[]
         {
-            $@"(?i)(.+?)\s+rail\s+to\s+(.+?)\s*:\s*{datePart}",
-            $@"(?i)(.+?)\s+to\s+(.+?)\s*:\s*{datePart}",
+            $@"(?i)(heathrow\s+terminal\s+\d+)\s+rail\s+to\s+(.+?)\s*:\s*{datePart}",
+            $@"(?i)([A-Z][A-Za-z0-9]+(?:\s+[A-Z0-9][A-Za-z0-9&'\-\.]+)*)\s+rail\s+to\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9&'\-\.]+)*)\s*:\s*{datePart}",
+            $@"(?i)([A-Z][A-Za-z0-9]+(?:\s+[A-Z0-9][A-Za-z0-9&'\-\.]+)*)\s+to\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9&'\-\.]+)*)\s*:\s*{datePart}",
         };
 
         foreach (var pattern in patterns)
@@ -442,9 +449,9 @@ public class ReceiptParserService
             var m = Regex.Match(text, pattern);
             if (!m.Success) continue;
 
-            var o = CleanLocation(m.Groups[1].Value);
-            var d = CleanLocation(m.Groups[2].Value);
-            if (IsPlausibleLocation(o)) r.Origin ??= o;
+            var o = CleanStationName(m.Groups[1].Value);
+            var d = CleanStationName(m.Groups[2].Value);
+            if (IsPlausibleOrigin(o)) r.Origin ??= o;
             if (IsPlausibleLocation(d)) r.Destination ??= d;
             if (TryBuildDate(m.Groups[3].Value, m.Groups[4].Value, m.Groups[5].Value, out var iso))
                 r.TripDate ??= iso;
@@ -457,6 +464,25 @@ public class ReceiptParserService
         }
     }
 
+    private static bool IsPlausibleOrigin(string s)
+    {
+        if (!IsPlausibleLocation(s)) return false;
+        var lower = s.ToLowerInvariant();
+        string[] reject =
+        {
+            "price", "total", "qty", "item", "unit", "booking", "subtotal", "fee", "amount"
+        };
+        return !reject.Any(r => lower.Contains(r));
+    }
+
+    private static string CleanStationName(string s)
+    {
+        s = CleanLocation(s);
+        var heathrow = Regex.Match(s, @"(?i)\b(heathrow\s+terminal\s+\d+)\b");
+        if (heathrow.Success) return ToTitleCase(heathrow.Groups[1].Value);
+        return s;
+    }
+
     private static void ApplyFilenameHints(string? fileName, ParsedReceiptData r)
     {
         if (string.IsNullOrWhiteSpace(fileName)) return;
@@ -466,7 +492,7 @@ public class ReceiptParserService
         var lower = stem.ToLowerInvariant();
 
         // tickets_for_L_Grieve___A_Wilczynski / hotel_for_Adam_Wilczynski
-        var forM = Regex.Match(stem, @"(?i)(?:hotel|tickets)_for_(.+?)(?:_re_trip_to_|_re_|_-_)");
+        var forM = Regex.Match(stem, @"(?i)(?:hotel|tickets)_for_([A-Za-z][A-Za-z_]+(?:___[A-Za-z][A-Za-z_]+)?)(?:_re_trip_to_|_re_|_-_)");
         if (forM.Success)
             SetTravellers(r, forM.Groups[1].Value);
 
@@ -476,14 +502,6 @@ public class ReceiptParserService
             var multiM = Regex.Match(stem, @"(?i)([A-Za-z]_[A-Za-z][A-Za-z_]*?)___([A-Za-z]_[A-Za-z][A-Za-z_]*?)");
             if (multiM.Success)
                 SetTravellers(r, multiM.Groups[1].Value + "___" + multiM.Groups[2].Value);
-        }
-
-        // for_Adam_Wilczynski without hotel/tickets prefix
-        if (r.TravellerNames.Count == 0)
-        {
-            var forAlt = Regex.Match(stem, @"(?i)_for_([A-Za-z][A-Za-z_]+?)(?:_re_trip_to_|_re_|_-_|_\d)");
-            if (forAlt.Success)
-                SetTravellers(r, forAlt.Groups[1].Value);
         }
 
         // Heathrow_to_Paddington (skip for hotel receipts — "re_trip_to_Boston" is not a route)
@@ -536,13 +554,25 @@ public class ReceiptParserService
         raw = raw.Replace("___", "|");
         var parts = Regex.Split(raw, @"\||\s*(?:&|\+|,|\band\b)\s*", RegexOptions.IgnoreCase)
             .Select(s => ToTitleCase(Clean(s.Replace('_', ' '))))
-            .Where(s => s.Length > 1 && !IsPlausibleLocation(s))
+            .Where(s => s.Length > 1 && IsPlausiblePersonName(s))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (parts.Count == 0) return;
 
         r.TravellerNames = parts;
         r.TravellerName ??= string.Join(" & ", parts);
+    }
+
+    private static bool IsPlausiblePersonName(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s) || s.Length < 2 || s.Length > 60) return false;
+        var lower = s.ToLowerInvariant();
+        string[] reject =
+        {
+            "ticket", "receipt", "invoice", "express", "trainline", "heathrow", "paddington",
+            "hotel", "expedia", "booking", "total", "price", "dell", "rework"
+        };
+        return !reject.Any(r => lower.Contains(r));
     }
 
     private static int MonthNum(string s) => s.ToLowerInvariant() switch
@@ -561,8 +591,8 @@ public class ReceiptParserService
     private static string CleanLocation(string s)
     {
         s = Clean(s.Trim(' ', ',', '.', ';', ':'));
-        // Drop trailing time fragments e.g. "London 09:30"
         s = Regex.Replace(s, @"\s+\d{1,2}:\d{2}(?::\d{2})?\s*$", "");
+        s = Regex.Replace(s, @"\s+rail$", "", RegexOptions.IgnoreCase);
         return s;
     }
 
