@@ -51,7 +51,28 @@ public class TripController : Controller
             await using (var parseStream = System.IO.File.OpenRead(filePath))
                 parsed = _parser.ParseFile(parseStream, ext);
 
-            return Json(new { success = true, fileName, parsed });
+            _logger.LogInformation(
+                "ParseReceipt {File}: name={Name}, route={Origin}->{Dest}, date={Date}, mode={Mode}",
+                fileName, parsed.TravellerName, parsed.Origin, parsed.Destination, parsed.TripDate, parsed.TransportMode);
+
+            // Explicit lowercase keys so the Log Trip form JS always receives predictable property names
+            return Json(new
+            {
+                success = true,
+                fileName,
+                parsed = new
+                {
+                    travellerName  = parsed.TravellerName,
+                    origin         = parsed.Origin,
+                    destination    = parsed.Destination,
+                    tripDate       = parsed.TripDate,
+                    transportMode  = parsed.TransportMode,
+                    travelClass    = parsed.TravelClass,
+                    passengers     = parsed.Passengers,
+                    purpose        = parsed.Purpose,
+                    extractionNote = parsed.ExtractionNote,
+                }
+            });
         }
         catch (UnauthorizedAccessException ex)
         {

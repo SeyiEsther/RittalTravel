@@ -710,6 +710,92 @@ function toModeSelectValue(transportMode, travelClass) {
     return transportMode;
 }
 
+function pval(obj, key) {
+    if (!obj) return null;
+    const v = obj[key];
+    if (v !== undefined && v !== null && v !== '') return v;
+    const pascal = key.charAt(0).toUpperCase() + key.slice(1);
+    const v2 = obj[pascal];
+    if (v2 !== undefined && v2 !== null && v2 !== '') return v2;
+    return null;
+}
+
+function syncHiddenRouteFields() {
+    const firstIdx = stopValues.findIndex(v => v && v.trim().length > 0);
+    const lastIdx  = stopValues.length - 1 - [...stopValues].reverse().findIndex(v => v && v.trim().length > 0);
+    if (firstIdx >= 0) document.getElementById('fld-origin').value = stopValues[firstIdx].trim();
+    if (lastIdx >= 0)  document.getElementById('fld-destination').value = stopValues[lastIdx].trim();
+}
+
+function applyParsedMode(transportMode, travelClass) {
+    if (!transportMode) return;
+    const combined = toModeSelectValue(transportMode, travelClass);
+    legModeValues = legModeValues.map(() => combined);
+    buildRouteUI();
+    let finalCombined = combined;
+    document.querySelectorAll('.rb-mode-sel').forEach((sel, idx) => {
+        const want = legModeValues[idx] || combined;
+        if ([...sel.options].some(o => o.value === want)) {
+            sel.value = want;
+            finalCombined = want;
+            return;
+        }
+        const match = [...sel.options].find(o => o.value.startsWith(transportMode + '-'));
+        if (match) { sel.value = match.value; finalCombined = match.value; }
+    });
+    const { mode, travelClass: cls } = splitMode(finalCombined);
+    document.getElementById('fld-mode').value  = mode;
+    document.getElementById('fld-class').value = cls;
+}
+
+function applyParsedReceipt(p) {
+    let filled = [];
+
+    const name = pval(p, 'travellerName');
+    if (name) {
+        const inp = document.querySelector('input[name="TravellerName"]');
+        if (inp) { inp.value = name; filled.push('name'); }
+    }
+
+    const date = pval(p, 'tripDate');
+    if (date) {
+        const inp = document.querySelector('input[name="TripDate"]');
+        if (inp) { inp.value = date; filled.push('date'); }
+    }
+
+    const pax = pval(p, 'passengers');
+    if (pax) {
+        const inp = document.getElementById('inp-pax');
+        if (inp) { inp.value = pax; filled.push('passengers'); }
+    }
+
+    const purpose = pval(p, 'purpose');
+    if (purpose) {
+        const inp = document.querySelector('input[name="Purpose"]');
+        if (inp) { inp.value = purpose; filled.push('purpose'); }
+    }
+
+    const origin = pval(p, 'origin');
+    const dest   = pval(p, 'destination');
+    if (origin) { stopValues[0] = origin; stopPlaces[0] = null; filled.push('origin'); }
+    if (dest) {
+        const last = stopValues.length - 1;
+        stopValues[last] = dest; stopPlaces[last] = null; filled.push('destination');
+    }
+    if (origin || dest) buildRouteUI();
+
+    const mode = pval(p, 'transportMode');
+    const cls  = pval(p, 'travelClass');
+    if (mode) {
+        applyParsedMode(mode, cls);
+        filled.push('transport mode');
+    }
+
+    syncHiddenRouteFields();
+    updatePreview();
+    return filled;
+}
+
 async function handleReceiptFile(input) {
     const file = input.files[0];
     if (!file) return;
@@ -725,47 +811,15 @@ async function handleReceiptFile(input) {
         const data = await postFormWithAntiforgery(PARSE_RECEIPT_URL, fd);
         if (!data.success) { status.style.color = '#f85149'; status.textContent = data.error || 'Parse failed.'; return; }
 
-        document.getElementById('fld-receipt').value = data.fileName;
+        document.getElementById('fld-receipt').value = data.fileName || data.FileName || '';
 
-        const p = data.parsed || {};
-        let filled = [];
-
-        if (p.travellerName) {
-            const inp = document.querySelector('input[name="TravellerName"]');
-            if (inp && !inp.value) { inp.value = p.travellerName; filled.push('name'); }
-        }
-        if (p.tripDate) {
-            const inp = document.querySelector('input[name="TripDate"]');
-            if (inp) { inp.value = p.tripDate; filled.push('date'); }
-        }
-        if (p.passengers) {
-            const inp = document.getElementById('inp-pax');
-            if (inp && inp.value == '1') { inp.value = p.passengers; filled.push('passengers'); }
-        }
-        if (p.purpose) {
-            const inp = document.querySelector('input[name="Purpose"]');
-            if (inp && !inp.value) { inp.value = p.purpose; filled.push('purpose'); }
-        }
-        if (p.origin) {
-            stopValues[0] = p.origin; stopPlaces[0] = null; filled.push('origin');
-        }
-        if (p.destination) {
-            const last = stopValues.length - 1;
-            stopValues[last] = p.destination; stopPlaces[last] = null; filled.push('destination');
-        }
-        if (p.origin || p.destination) buildRouteUI();
-
-        if (p.transportMode) {
-            const combined = toModeSelectValue(p.transportMode, p.travelClass);
-            legModeValues = legModeValues.map(() => combined);
-            buildRouteUI();
-            filled.push('transport mode');
-        }
+        const filled = applyParsedReceipt(data.parsed || {});
 
         status.style.color = '#3fb950';
+        const note = pval(data.parsed, 'extractionNote');
         status.textContent = filled.length
             ? 'Extracted: ' + filled.join(', ') + '. Review and correct before saving.'
-            : (p.extractionNote || 'File stored. No fields could be extracted — fill in manually.');
+            : (note || 'File stored. No fields could be extracted — fill in manually.');
     } catch (err) {
         status.style.color = '#f85149';
         status.textContent = err.message || 'Upload failed. Check your connection and try again.';

@@ -13,7 +13,9 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddAntiforgery(o => o.HeaderName = "RequestVerificationToken");
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
     o.MultipartBodyLengthLimit = 20 * 1024 * 1024);
-builder.Services.AddControllersWithViews().AddNewtonsoftJson();
+builder.Services.AddControllersWithViews()
+    .AddNewtonsoftJson(o => o.SerializerSettings.ContractResolver =
+        new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver());
 builder.Services.Configure<RittalTravelOptions>(
     builder.Configuration.GetSection(RittalTravelOptions.SectionName));
 
