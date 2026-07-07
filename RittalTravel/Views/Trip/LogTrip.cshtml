@@ -677,6 +677,13 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDetourVisibility();
 });
 
+function toModeSelectValue(transportMode, travelClass) {
+    if (!transportMode) return 'Train-National';
+    if (transportMode.startsWith('Flight') && travelClass)
+        return transportMode + '-' + travelClass;
+    return transportMode;
+}
+
 async function handleReceiptFile(input) {
     const file = input.files[0];
     if (!file) return;
@@ -706,11 +713,15 @@ async function handleReceiptFile(input) {
         }
         if (p.tripDate) {
             const inp = document.querySelector('input[name="TripDate"]');
-            if (inp && !inp.value) { inp.value = p.tripDate; filled.push('date'); }
+            if (inp) { inp.value = p.tripDate; filled.push('date'); }
         }
         if (p.passengers) {
             const inp = document.getElementById('inp-pax');
             if (inp && inp.value == '1') { inp.value = p.passengers; filled.push('passengers'); }
+        }
+        if (p.purpose) {
+            const inp = document.querySelector('input[name="Purpose"]');
+            if (inp && !inp.value) { inp.value = p.purpose; filled.push('purpose'); }
         }
         if (p.origin) {
             stopValues[0] = p.origin; stopPlaces[0] = null; filled.push('origin');
@@ -722,7 +733,7 @@ async function handleReceiptFile(input) {
         if (p.origin || p.destination) buildRouteUI();
 
         if (p.transportMode) {
-            const combined = p.travelClass ? p.transportMode + '-' + p.travelClass : p.transportMode;
+            const combined = toModeSelectValue(p.transportMode, p.travelClass);
             legModeValues = legModeValues.map(() => combined);
             buildRouteUI();
             filled.push('transport mode');

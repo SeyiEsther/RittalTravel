@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using RittalTravel.Data;
 using RittalTravel.Models;
+using RittalTravel.Services;
 
 namespace RittalTravel.Controllers;
 
@@ -9,11 +11,14 @@ public class DashboardController : Controller
 {
     private readonly RittalTravelContext _db;
     private readonly ILogger<DashboardController> _logger;
+    private readonly RittalTravelOptions _options;
 
-    public DashboardController(RittalTravelContext db, ILogger<DashboardController> logger)
+    public DashboardController(RittalTravelContext db, ILogger<DashboardController> logger,
+        IOptions<RittalTravelOptions> options)
     {
         _db = db;
         _logger = logger;
+        _options = options.Value;
     }
 
     public async Task<IActionResult> Index()
@@ -21,7 +26,7 @@ public class DashboardController : Controller
         try
         {
             int currentYear = DateTime.Now.Year;
-            var allTrips = await _db.Trips.Where(t => t.OrganisationId == 1)
+            var allTrips = await _db.Trips.Where(t => t.OrganisationId == _options.OrganisationId)
                 .OrderByDescending(t => t.TripDate).ToListAsync();
             var yearTrips = allTrips.Where(t => t.TripDate.Year == currentYear).ToList();
 

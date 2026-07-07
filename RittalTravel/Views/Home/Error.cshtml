@@ -1,0 +1,16 @@
+@{
+    ViewData["Title"] = "Error";
+    Layout = "_Layout";
+}
+
+<div class="rt-page-header">
+    <h1 class="rt-page-title">Something went wrong</h1>
+    <p class="rt-page-sub">An unexpected error occurred. Please try again or contact IT support.</p>
+</div>
+
+<div class="rt-card">
+    <p class="rt-empty">If the problem persists, check the application logs or restart the site in IIS.</p>
+    <div style="margin-top:1rem">
+        <a asp-controller="Dashboard" asp-action="Index" class="rt-btn rt-btn-red">Return to Dashboard</a>
+    </div>
+</div>

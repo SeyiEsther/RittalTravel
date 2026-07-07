@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using RittalTravel.Data;
 using RittalTravel.Models;
+using RittalTravel.Services;
 
 namespace RittalTravel.Controllers;
 
@@ -12,10 +14,13 @@ public class ReportController : Controller
 {
     private readonly RittalTravelContext _db;
     private readonly ILogger<ReportController> _logger;
+    private readonly RittalTravelOptions _options;
 
-    public ReportController(RittalTravelContext db, ILogger<ReportController> logger)
+    public ReportController(RittalTravelContext db, ILogger<ReportController> logger,
+        IOptions<RittalTravelOptions> options)
     {
         _db = db; _logger = logger;
+        _options = options.Value;
     }
 
     [HttpGet]
@@ -23,7 +28,7 @@ public class ReportController : Controller
     {
         try
         {
-            var trips = await _db.Trips.Where(t => t.OrganisationId == 1)
+            var trips = await _db.Trips.Where(t => t.OrganisationId == _options.OrganisationId)
                 .OrderByDescending(t => t.TripDate).ToListAsync();
             _logger.LogInformation("Generating PDF with {Count} trips", trips.Count);
             var pdf = GeneratePdf(trips);

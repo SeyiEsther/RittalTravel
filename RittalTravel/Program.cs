@@ -11,6 +11,8 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("DefaultConnection not found.");
 
 builder.Services.AddControllersWithViews().AddNewtonsoftJson();
+builder.Services.Configure<RittalTravelOptions>(
+    builder.Configuration.GetSection(RittalTravelOptions.SectionName));
 
 builder.Services.AddDbContext<RittalTravelContext>(options =>
     options.UseSqlServer(connectionString,

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using RittalTravel.Data;
 using RittalTravel.Models;
 using RittalTravel.Services;
@@ -12,17 +13,20 @@ public class ReceiptController : Controller
     private readonly ReceiptParserService _parser;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<ReceiptController> _logger;
+    private readonly RittalTravelOptions _options;
 
     public ReceiptController(RittalTravelContext db, ReceiptParserService parser,
-        IWebHostEnvironment env, ILogger<ReceiptController> logger)
+        IWebHostEnvironment env, ILogger<ReceiptController> logger,
+        IOptions<RittalTravelOptions> options)
     {
         _db = db; _parser = parser; _env = env; _logger = logger;
+        _options = options.Value;
     }
 
     [HttpGet]
     public async Task<IActionResult> Index(string? search)
     {
-        var query = _db.Receipts.Where(r => r.OrganisationId == 1).AsQueryable();
+        var query = _db.Receipts.Where(r => r.OrganisationId == _options.OrganisationId).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -55,7 +59,7 @@ public class ReceiptController : Controller
 
         try
         {
-            var uploadsDir = Path.Combine(_env.ContentRootPath, "Uploads");
+            var uploadsDir = UploadPathHelper.GetUploadsDirectory(_env);
             Directory.CreateDirectory(uploadsDir);
             var storedName = Guid.NewGuid() + ext;
             var filePath = Path.Combine(uploadsDir, storedName);
@@ -75,7 +79,7 @@ public class ReceiptController : Controller
                 FileName         = storedName,
                 OriginalFileName = file.FileName,
                 UploadedAt       = DateTime.UtcNow,
-                OrganisationId   = 1,
+                OrganisationId   = _options.OrganisationId,
                 TravellerName    = parsed?.TravellerName,
                 Origin           = parsed?.Origin,
                 Destination      = parsed?.Destination,
@@ -103,12 +107,10 @@ public class ReceiptController : Controller
         var receipt = await _db.Receipts.FindAsync(id);
         if (receipt == null) return NotFound();
 
-        var safeFileName = Path.GetFileName(receipt.FileName);
-        if (string.IsNullOrEmpty(safeFileName)) return NotFound();
-        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", safeFileName);
-        if (!System.IO.File.Exists(filePath)) return NotFound();
+        var filePath = UploadPathHelper.ResolveUploadFilePath(_env, receipt.FileName);
+        if (filePath == null || !System.IO.File.Exists(filePath)) return NotFound();
 
-        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
         var contentType = ext switch
         {
             ".pdf"            => "application/pdf",
@@ -133,9 +135,7 @@ public class ReceiptController : Controller
             var receipt = await _db.Receipts.FindAsync(id);
             if (receipt == null) { TempData["Error"] = "Receipt not found."; return RedirectToAction(nameof(Index)); }
 
-            var filePath = Path.Combine(_env.ContentRootPath, "Uploads", receipt.FileName);
-            if (System.IO.File.Exists(filePath))
-                System.IO.File.Delete(filePath);
+            UploadPathHelper.TryDeleteUploadFile(_env, receipt.FileName);
 
             _db.Receipts.Remove(receipt);
             await _db.SaveChangesAsync();

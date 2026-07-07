@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using RittalTravel.Data;
 using RittalTravel.Models;
@@ -14,11 +15,14 @@ public class TripController : Controller
     private readonly ReceiptParserService _parser;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<TripController> _logger;
+    private readonly RittalTravelOptions _options;
 
     public TripController(RittalTravelContext db, GoogleMapsService maps,
-        ReceiptParserService parser, IWebHostEnvironment env, ILogger<TripController> logger)
+        ReceiptParserService parser, IWebHostEnvironment env, ILogger<TripController> logger,
+        IOptions<RittalTravelOptions> options)
     {
         _db = db; _maps = maps; _parser = parser; _env = env; _logger = logger;
+        _options = options.Value;
     }
 
     [HttpPost]
@@ -34,7 +38,7 @@ public class TripController : Controller
 
         try
         {
-            var uploadsDir = Path.Combine(_env.ContentRootPath, "Uploads");
+            var uploadsDir = UploadPathHelper.GetUploadsDirectory(_env);
             Directory.CreateDirectory(uploadsDir);
             var fileName = Guid.NewGuid() + ext;
             var filePath = Path.Combine(uploadsDir, fileName);
@@ -64,12 +68,10 @@ public class TripController : Controller
         var trip = await _db.Trips.FindAsync(id);
         if (trip?.ReceiptFileName == null) return NotFound();
 
-        var safeFileName = Path.GetFileName(trip.ReceiptFileName);
-        if (string.IsNullOrEmpty(safeFileName)) return NotFound();
-        var filePath = Path.Combine(_env.ContentRootPath, "Uploads", safeFileName);
-        if (!System.IO.File.Exists(filePath)) return NotFound();
+        var filePath = UploadPathHelper.ResolveUploadFilePath(_env, trip.ReceiptFileName);
+        if (filePath == null || !System.IO.File.Exists(filePath)) return NotFound();
 
-        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
         var contentType = ext switch
         {
             ".pdf"          => "application/pdf",
@@ -86,7 +88,7 @@ public class TripController : Controller
     {
         try
         {
-            var trips = await _db.Trips.Where(t => t.OrganisationId == 1)
+            var trips = await _db.Trips.Where(t => t.OrganisationId == _options.OrganisationId)
                 .OrderByDescending(t => t.TripDate).ToListAsync();
             int currentYear = DateTime.Now.Year;
             var yearTrips = trips.Where(t => t.TripDate.Year == currentYear).ToList();
@@ -111,7 +113,7 @@ public class TripController : Controller
     [HttpGet]
     public IActionResult LogTrip()
     {
-        return View(new Trip { TripDate = DateTime.Today, Passengers = 1, LoggedBy = User.Identity?.Name ?? "" });
+        return View(new Trip { Passengers = 1, LoggedBy = User.Identity?.Name ?? "" });
     }
 
     [HttpPost]
@@ -172,9 +174,31 @@ public class TripController : Controller
                 string rd  = differentReturn && !string.IsNullOrWhiteSpace(returnDestination) ? returnDestination! : trip.Origin;
                 double rd2 = await _maps.GetDistanceKm(ro, rd, trip.TransportMode, accountForDetours);
                 double rf  = DefraCalculator.GetEmissionFactor(trip.TransportMode, trip.TravelClass);
+                if (rf == 0 || rd2 <= 0)
+                {
+                    ModelState.AddModelError("", $"Could not calculate return leg {ro} to {rd}.");
+                    return View(trip);
+                }
                 double rkg = DefraCalculator.CalculateKgCO2e(rd2, rf, trip.Passengers);
                 totalDist += rd2; totalKg += rkg;
                 formulaParts.Add($"Return: {DefraCalculator.GetFormula(trip.TransportMode, trip.TravelClass, rd2, rf, trip.Passengers, rkg)}");
+            }
+
+            string? safeReceiptFileName = null;
+            if (!string.IsNullOrWhiteSpace(receiptFileName))
+            {
+                if (!UploadPathHelper.IsValidStoredFileName(receiptFileName))
+                {
+                    ModelState.AddModelError("", "Invalid receipt file reference.");
+                    return View(trip);
+                }
+                var receiptPath = UploadPathHelper.ResolveUploadFilePath(_env, receiptFileName);
+                if (receiptPath == null || !System.IO.File.Exists(receiptPath))
+                {
+                    ModelState.AddModelError("", "Receipt file was not found. Please upload it again.");
+                    return View(trip);
+                }
+                safeReceiptFileName = Path.GetFileName(receiptFileName);
             }
 
             trip.DistanceKm          = Math.Round(totalDist, 2);
@@ -183,11 +207,11 @@ public class TripController : Controller
             trip.Formula             = string.Join(" | ", formulaParts);
             trip.DistanceMethodology = DefraCalculator.GetDistanceMethodology(dominantMode);
             trip.TransportMode       = dominantMode;
-            trip.DefraFactorYear     = "DEFRA 2025";
-            trip.OrganisationId      = 1;
+            trip.DefraFactorYear     = _options.DefraFactorYear;
+            trip.OrganisationId      = _options.OrganisationId;
             trip.LoggedBy            = User.Identity?.Name ?? "";
             trip.CreatedAt           = DateTime.UtcNow;
-            trip.ReceiptFileName     = receiptFileName;
+            trip.ReceiptFileName     = safeReceiptFileName;
 
             _db.Trips.Add(trip);
             await _db.SaveChangesAsync();
@@ -210,6 +234,9 @@ public class TripController : Controller
         {
             var trip = await _db.Trips.FindAsync(id);
             if (trip == null) { TempData["Error"] = "Trip not found."; return RedirectToAction(nameof(Index)); }
+
+            UploadPathHelper.TryDeleteUploadFile(_env, trip.ReceiptFileName);
+
             _db.Trips.Remove(trip);
             await _db.SaveChangesAsync();
             TempData["Success"] = $"Trip for {trip.TravellerName} deleted.";
