@@ -47,12 +47,9 @@ public class TripController : Controller
             await using (var fs = new FileStream(filePath, FileMode.Create))
                 await receipt.CopyToAsync(fs);
 
-            ParsedReceiptData? parsed = null;
-            if (ext == ".pdf")
-            {
-                await using var fs = System.IO.File.OpenRead(filePath);
-                parsed = _parser.ParsePdf(fs);
-            }
+            ParsedReceiptData parsed;
+            await using (var parseStream = System.IO.File.OpenRead(filePath))
+                parsed = _parser.ParseFile(parseStream, ext);
 
             return Json(new { success = true, fileName, parsed });
         }

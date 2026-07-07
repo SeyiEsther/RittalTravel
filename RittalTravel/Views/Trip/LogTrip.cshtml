@@ -84,7 +84,8 @@
 
                 <!-- Receipt Upload -->
                 <div class="lt-section">
-                    <div class="lt-section-title">Upload Receipt <span class="lt-optional">(optional — auto-fills fields below)</span></div>
+                    <div class="lt-section-title">Upload Receipt <span class="lt-optional">(optional — PDF e-tickets auto-fill fields below)</span></div>
+                    <p style="font-size:.75rem;color:var(--txm);margin:-0.5rem 0 .75rem">Works best with PDF booking confirmations from Trainline, airlines, etc. Photos and scanned images must be entered manually.</p>
                     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
                         <label class="lt-btn-cancel" style="cursor:pointer;margin:0" for="receipt-file-input">
                             Choose file
@@ -764,7 +765,7 @@ async function handleReceiptFile(input) {
         status.style.color = '#3fb950';
         status.textContent = filled.length
             ? 'Extracted: ' + filled.join(', ') + '. Review and correct before saving.'
-            : 'File stored. No fields could be extracted — fill in manually.';
+            : (p.extractionNote || 'File stored. No fields could be extracted — fill in manually.');
     } catch (err) {
         status.style.color = '#f85149';
         status.textContent = err.message || 'Upload failed. Check your connection and try again.';

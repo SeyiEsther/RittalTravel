@@ -74,12 +74,9 @@ public class ReceiptController : Controller
             await using (var fs = new FileStream(filePath, FileMode.Create))
                 await file.CopyToAsync(fs);
 
-            ParsedReceiptData? parsed = null;
-            if (ext == ".pdf")
-            {
-                await using var fs = System.IO.File.OpenRead(filePath);
-                parsed = _parser.ParsePdf(fs);
-            }
+            ParsedReceiptData parsed;
+            await using (var parseStream = System.IO.File.OpenRead(filePath))
+                parsed = _parser.ParseFile(parseStream, ext);
 
             var receipt = new Receipt
             {
@@ -87,11 +84,11 @@ public class ReceiptController : Controller
                 OriginalFileName = file.FileName,
                 UploadedAt       = DateTime.UtcNow,
                 OrganisationId   = _options.OrganisationId,
-                TravellerName    = parsed?.TravellerName,
-                Origin           = parsed?.Origin,
-                Destination      = parsed?.Destination,
-                TripDate         = parsed?.TripDate,
-                TransportMode    = parsed?.TransportMode,
+                TravellerName    = parsed.TravellerName,
+                Origin           = parsed.Origin,
+                Destination      = parsed.Destination,
+                TripDate         = parsed.TripDate,
+                TransportMode    = parsed.TransportMode,
                 Notes            = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
                 DocumentType     = string.IsNullOrWhiteSpace(documentType) ? null : documentType.Trim(),
             };
@@ -100,15 +97,18 @@ public class ReceiptController : Controller
             await _db.SaveChangesAsync();
 
             var extracted = new List<string>();
-            if (parsed?.TravellerName != null) extracted.Add("name");
-            if (parsed?.Origin != null) extracted.Add("origin");
-            if (parsed?.Destination != null) extracted.Add("destination");
-            if (parsed?.TripDate != null) extracted.Add("date");
-            if (parsed?.TransportMode != null) extracted.Add("mode");
+            if (parsed.TravellerName != null) extracted.Add("name");
+            if (parsed.Origin != null) extracted.Add("origin");
+            if (parsed.Destination != null) extracted.Add("destination");
+            if (parsed.TripDate != null) extracted.Add("date");
+            if (parsed.TransportMode != null) extracted.Add("mode");
 
-            TempData["Success"] = extracted.Count > 0
-                ? $"\"{receipt.OriginalFileName}\" uploaded. Extracted: {string.Join(", ", extracted)}."
-                : $"\"{receipt.OriginalFileName}\" uploaded successfully.";
+            if (extracted.Count > 0)
+                TempData["Success"] = $"\"{receipt.OriginalFileName}\" uploaded. Extracted: {string.Join(", ", extracted)}.";
+            else if (!string.IsNullOrWhiteSpace(parsed.ExtractionNote))
+                TempData["Success"] = $"\"{receipt.OriginalFileName}\" uploaded. {parsed.ExtractionNote}";
+            else
+                TempData["Success"] = $"\"{receipt.OriginalFileName}\" uploaded successfully.";
             return RedirectToAction(nameof(Index));
         }
         catch (UnauthorizedAccessException ex)
