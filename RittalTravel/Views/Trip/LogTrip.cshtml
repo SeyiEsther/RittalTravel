@@ -107,16 +107,22 @@
                 <!-- Traveller Details -->
                 <div class="lt-section">
                     <div class="lt-section-title">Traveller Details</div>
-                    <div class="lt-grid-2">
-                        <div class="lt-field">
-                            <label asp-for="TravellerName">Full Name <span class="lt-req">*</span></label>
-                            <input asp-for="TravellerName" class="lt-input" placeholder="e.g. Ali Hassan" required autocomplete="off" />
-                            <span asp-validation-for="TravellerName" class="lt-val-error"></span>
-                        </div>
-                        <div class="lt-field">
-                            <label asp-for="Purpose">Purpose</label>
-                            <input asp-for="Purpose" class="lt-input" placeholder="e.g. Client meeting" autocomplete="off" />
-                        </div>
+                    <div class="lt-field">
+                        <label>Travellers <span class="lt-req">*</span></label>
+                        <p class="lt-field-hint">One name per passenger — group tickets (e.g. Trainline) often list several people.</p>
+                        <div id="traveller-names-list" class="lt-traveller-list"></div>
+                        <button type="button" class="btn-add-stop" id="btn-add-traveller" style="margin-top:.5rem">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
+                            Add traveller
+                        </button>
+                        <input type="hidden" asp-for="TravellerName" id="TravellerName" />
+                        <span asp-validation-for="TravellerName" class="lt-val-error"></span>
+                    </div>
+                    <div class="lt-field" style="margin-top:.875rem">
+                        <label asp-for="Purpose">Purpose</label>
+                        <input asp-for="Purpose" class="lt-input" placeholder="e.g. Client meeting" autocomplete="off" />
                     </div>
                 </div>
 
@@ -357,6 +363,7 @@ let stopValues       = ['', ''];
 let stopPlaces       = [null, null];
 let legModeValues    = ['Train-National'];
 let stopInputEls     = [];
+let travellerNames   = [''];
 let mapsReady        = false;
 let mapInstance      = null;
 let mapMarkers       = [];
@@ -669,6 +676,11 @@ function toggleDiffReturn() {
 
 function onFormSubmit(e) {
     stopInputEls.forEach((inp, i) => { if (inp) stopValues[i] = safeStr(inp.value); });
+    syncTravellerHidden();
+    if (!safeStr(document.getElementById('TravellerName')?.value)) {
+        alert('Please enter at least one traveller name.');
+        return false;
+    }
     const filled = stopValues.filter(v => safeStr(v).length > 0);
     if (filled.length < 2) {
         alert('Please enter at least an origin and a destination.');
@@ -716,8 +728,18 @@ function addHidden(parent, name, value) {
 
 document.addEventListener('DOMContentLoaded', () => {
     buildRouteUI();
-    document.getElementById('inp-pax').addEventListener('input', updatePreview);
+    buildTravellerUI();
+    document.getElementById('inp-pax').addEventListener('input', () => {
+        const pax = Math.max(1, parseInt(document.getElementById('inp-pax')?.value, 10) || 1);
+        ensureTravellerSlots(pax);
+        buildTravellerUI();
+        updatePreview();
+    });
     updateDetourVisibility();
+    document.getElementById('btn-add-traveller')?.addEventListener('click', () => {
+        travellerNames.push('');
+        buildTravellerUI();
+    });
     const applyBtn = document.getElementById('btn-apply-receipt');
     if (applyBtn) {
         applyBtn.addEventListener('click', () => {
@@ -775,7 +797,6 @@ function syncHiddenRouteFields() {
 let lastParsedReceipt = null;
 
 const EXTRACT_LABELS = {
-    travellerName: 'Traveller',
     origin: 'Origin',
     destination: 'Destination',
     tripDate: 'Date',
@@ -785,6 +806,81 @@ const EXTRACT_LABELS = {
     purpose: 'Purpose',
 };
 
+function parseTravellerNamesFromParsed(p) {
+    const arr = p?.travellerNames || p?.TravellerNames;
+    if (Array.isArray(arr) && arr.length)
+        return arr.map(n => safeStr(n)).filter(Boolean);
+    const single = pval(p, 'travellerName');
+    if (!single) return [];
+    return single.split(/\s*(?:&|\+|,|\band\b)\s*/i).map(s => safeStr(s)).filter(Boolean);
+}
+
+function ensureTravellerSlots(count) {
+    const n = Math.max(1, Math.min(50, count || 1));
+    while (travellerNames.length < n) travellerNames.push('');
+    while (travellerNames.length > n && travellerNames.length > 1) travellerNames.pop();
+}
+
+function syncTravellerHidden() {
+    const combined = travellerNames.map(s => safeStr(s)).filter(Boolean).join(' & ');
+    const hidden = document.getElementById('TravellerName');
+    if (hidden) hidden.value = combined.slice(0, 100);
+}
+
+function buildTravellerUI() {
+    const container = document.getElementById('traveller-names-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    travellerNames.forEach((name, i) => {
+        const row = document.createElement('div');
+        row.className = 'lt-traveller-row';
+
+        const label = document.createElement('span');
+        label.className = 'lt-traveller-label';
+        label.textContent = travellerNames.length > 1 ? 'Traveller ' + (i + 1) : 'Lead traveller';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'lt-traveller-input-wrap';
+
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'lt-input';
+        inp.placeholder = i === 0 ? 'e.g. Ali Hassan' : 'e.g. Sam Taylor';
+        inp.value = name || '';
+        inp.autocomplete = 'off';
+        if (i === 0) inp.required = true;
+
+        const idx = i;
+        inp.addEventListener('input', () => {
+            travellerNames[idx] = inp.value;
+            syncTravellerHidden();
+        });
+
+        wrap.appendChild(inp);
+
+        if (travellerNames.length > 1) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'rb-btn-remove';
+            btn.title = 'Remove traveller';
+            btn.textContent = '×';
+            btn.addEventListener('click', () => {
+                travellerNames.splice(idx, 1);
+                if (travellerNames.length === 0) travellerNames.push('');
+                buildTravellerUI();
+            });
+            wrap.appendChild(btn);
+        }
+
+        row.appendChild(label);
+        row.appendChild(wrap);
+        container.appendChild(row);
+    });
+
+    syncTravellerHidden();
+}
+
 function showReceiptExtractPanel(parsed) {
     const panel = document.getElementById('receipt-extract-panel');
     const list  = document.getElementById('receipt-extract-list');
@@ -792,6 +888,18 @@ function showReceiptExtractPanel(parsed) {
 
     list.innerHTML = '';
     let hasAny = false;
+
+    const names = parseTravellerNamesFromParsed(parsed);
+    if (names.length) {
+        hasAny = true;
+        const dt = document.createElement('dt');
+        dt.textContent = names.length > 1 ? 'Travellers' : 'Traveller';
+        const dd = document.createElement('dd');
+        dd.textContent = names.join(', ');
+        list.appendChild(dt);
+        list.appendChild(dd);
+    }
+
     for (const [key, label] of Object.entries(EXTRACT_LABELS)) {
         const val = pval(parsed, key);
         if (val == null || val === '') continue;
@@ -821,9 +929,23 @@ function applyParsedReceipt(p) {
     if (!p) return [];
     const filled = [];
 
-    if (setInputValue('TravellerName', pval(p, 'travellerName'), true)) filled.push('name');
+    const pax = parseInt(pval(p, 'passengers'), 10);
+    if (!isNaN(pax) && pax >= 1) {
+        if (setInputValue('inp-pax', pax, true)) filled.push('passengers');
+        ensureTravellerSlots(pax);
+    }
+
+    const names = parseTravellerNamesFromParsed(p);
+    if (names.length) {
+        travellerNames = names.slice();
+        ensureTravellerSlots(Math.max(travellerNames.length, isNaN(pax) ? 1 : pax));
+        buildTravellerUI();
+        filled.push(travellerNames.length > 1 ? 'travellers' : 'traveller');
+    } else if (!isNaN(pax) && pax > 1) {
+        buildTravellerUI();
+    }
+
     if (setInputValue('TripDate', pval(p, 'tripDate'), true)) filled.push('date');
-    if (setInputValue('inp-pax', pval(p, 'passengers'), true)) filled.push('passengers');
     if (setInputValue('Purpose', pval(p, 'purpose'), true)) filled.push('purpose');
 
     const origin = pval(p, 'origin');

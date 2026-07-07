@@ -8,6 +8,7 @@ namespace RittalTravel.Services;
 public class ParsedReceiptData
 {
     public string? TravellerName { get; set; }
+    public List<string> TravellerNames { get; set; } = new();
     public string? Origin { get; set; }
     public string? Destination { get; set; }
     public string? TripDate { get; set; }
@@ -164,13 +165,15 @@ public class ReceiptParserService
         TryExtractRoute(text, result);
         result.TripDate ??= ExtractDate(text);
         result.TravellerName ??= ExtractName(text);
+        if (!string.IsNullOrWhiteSpace(result.TravellerName) && result.TravellerNames.Count == 0)
+            SetTravellers(result, result.TravellerName);
         result.Passengers ??= ExtractPassengers(text);
 
         return result;
     }
 
     private static bool HasUsefulData(ParsedReceiptData r)
-        => r.TravellerName != null || r.Origin != null || r.Destination != null
+        => r.TravellerName != null || r.TravellerNames.Count > 0 || r.Origin != null || r.Destination != null
            || r.TripDate != null || r.TransportMode != null;
 
     private static bool IsTrainDocument(string lower, string? mode)
@@ -465,9 +468,22 @@ public class ReceiptParserService
         // tickets_for_L_Grieve___A_Wilczynski / hotel_for_Adam_Wilczynski
         var forM = Regex.Match(stem, @"(?i)(?:hotel|tickets)_for_(.+?)(?:_re_trip_to_|_re_|_-_)");
         if (forM.Success)
+            SetTravellers(r, forM.Groups[1].Value);
+
+        // L_Grieve___A_Wilczynski embedded in longer Rittal filenames
+        if (r.TravellerNames.Count == 0)
         {
-            var raw = forM.Groups[1].Value.Replace("___", " & ").Replace('_', ' ');
-            r.TravellerName ??= ToTitleCase(Clean(raw));
+            var multiM = Regex.Match(stem, @"(?i)([A-Za-z]_[A-Za-z][A-Za-z_]*?)___([A-Za-z]_[A-Za-z][A-Za-z_]*?)");
+            if (multiM.Success)
+                SetTravellers(r, multiM.Groups[1].Value + "___" + multiM.Groups[2].Value);
+        }
+
+        // for_Adam_Wilczynski without hotel/tickets prefix
+        if (r.TravellerNames.Count == 0)
+        {
+            var forAlt = Regex.Match(stem, @"(?i)_for_([A-Za-z][A-Za-z_]+?)(?:_re_trip_to_|_re_|_-_|_\d)");
+            if (forAlt.Success)
+                SetTravellers(r, forAlt.Groups[1].Value);
         }
 
         // Heathrow_to_Paddington (skip for hotel receipts — "re_trip_to_Boston" is not a route)
@@ -513,6 +529,20 @@ public class ReceiptParserService
         }
         else if (HasUsefulData(r))
             r.ExtractionNote = null;
+    }
+
+    private static void SetTravellers(ParsedReceiptData r, string raw)
+    {
+        raw = raw.Replace("___", "|");
+        var parts = Regex.Split(raw, @"\||\s*(?:&|\+|,|\band\b)\s*", RegexOptions.IgnoreCase)
+            .Select(s => ToTitleCase(Clean(s.Replace('_', ' '))))
+            .Where(s => s.Length > 1 && !IsPlausibleLocation(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (parts.Count == 0) return;
+
+        r.TravellerNames = parts;
+        r.TravellerName ??= string.Join(" & ", parts);
     }
 
     private static int MonthNum(string s) => s.ToLowerInvariant() switch

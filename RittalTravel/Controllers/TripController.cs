@@ -63,6 +63,7 @@ public class TripController : Controller
                 parsed = new
                 {
                     travellerName  = parsed.TravellerName,
+                    travellerNames = parsed.TravellerNames,
                     origin         = parsed.Origin,
                     destination    = parsed.Destination,
                     tripDate       = parsed.TripDate,

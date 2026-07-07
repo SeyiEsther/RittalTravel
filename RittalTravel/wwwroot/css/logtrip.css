@@ -219,6 +219,35 @@ body.lt-body { background: var(--bg); min-height: 100vh; }
     gap: .75rem;
     margin-top: 1rem;
 }
+.lt-field-hint {
+    font-size: .75rem;
+    color: var(--txm);
+    margin: 0 0 .5rem;
+}
+.lt-traveller-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.lt-traveller-row {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    gap: .5rem;
+    align-items: center;
+}
+.lt-traveller-label {
+    font-size: .75rem;
+    color: var(--txm);
+}
+.lt-traveller-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: .375rem;
+}
+.lt-traveller-input-wrap .lt-input {
+    flex: 1;
+}
+
 .lt-receipt-extract {
     margin-top: .75rem;
     padding: .75rem .875rem;
