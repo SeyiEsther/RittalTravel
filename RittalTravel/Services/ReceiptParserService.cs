@@ -25,10 +25,10 @@ public class ReceiptParserService
 
     public ReceiptParserService(ILogger<ReceiptParserService> logger) => _logger = logger;
 
-    public ParsedReceiptData ParseFile(Stream stream, string extension)
+    public ParsedReceiptData ParseFile(Stream stream, string extension, string? originalFileName = null)
     {
         extension = extension.ToLowerInvariant();
-        return extension switch
+        var result = extension switch
         {
             ".pdf"              => ParsePdf(stream),
             ".jpg" or ".jpeg"
@@ -38,6 +38,12 @@ public class ReceiptParserService
                 },
             _ => new ParsedReceiptData { ExtractionNote = "Unsupported file type for auto-extraction." }
         };
+
+        ApplyFilenameHints(originalFileName, result);
+        if (!HasUsefulData(result) && result.ExtractionNote == null)
+            result.ExtractionNote = "Could not recognise trip details in this document. Check it is a travel receipt or e-ticket, or enter details manually.";
+
+        return result;
     }
 
     public ParsedReceiptData ParsePdf(Stream stream)
@@ -59,12 +65,7 @@ public class ReceiptParserService
             }
 
             _logger.LogInformation("Extracted {Chars} characters from PDF for parsing", text.Length);
-            var result = ParseText(text);
-
-            if (!HasUsefulData(result))
-                result.ExtractionNote ??= "Could not recognise trip details in this document. Check it is a travel receipt or e-ticket, or enter details manually.";
-
-            return result;
+            return ParseText(text);
         }
         catch (Exception ex)
         {
@@ -176,8 +177,9 @@ public class ReceiptParserService
         => mode is "Train-National" or "Train-International"
            || lower.Contains("trainline") || lower.Contains("lner") || lower.Contains("avanti")
            || lower.Contains("great western") || lower.Contains("national rail")
-           || lower.Contains("eurostar") || lower.Contains("tfl") || lower.Contains("railcard")
-           || lower.Contains("virgin trains") || lower.Contains("crosscountry") || lower.Contains("northern rail");
+           || lower.Contains("heathrow express") || lower.Contains("eurostar") || lower.Contains("tfl")
+           || lower.Contains("railcard") || lower.Contains("virgin trains") || lower.Contains("crosscountry")
+           || lower.Contains("northern rail");
 
     private static bool IsTaxiDocument(string lower, string? mode)
         => mode is "Taxi-Regular" or "Taxi-Electric"
@@ -221,7 +223,7 @@ public class ReceiptParserService
         var patterns = new[]
         {
             // London Paddington to Bristol Temple Meads
-            @"([A-Za-z][A-Za-z0-9 &'\-\.]{2,40}?)\s+to\s+([A-Za-z][A-Za-z0-9 &'\-\.]{2,40}?)(?:\s{2,}|\n|$|,|\.)",
+            @"([A-Za-z][A-Za-z0-9 &'\-\.]{2,40}?)\s+to\s+([A-Za-z][A-Za-z0-9 &'\-\.]{2,40}?)(?:\s{2,}|\n|$|,|\.|:)",
             // Kings Cross → Edinburgh / Manchester - Leeds
             @"([A-Za-z][A-Za-z0-9 &'\-\.]{2,40}?)\s*[→–—\-]\s*([A-Za-z][A-Za-z0-9 &'\-\.]{2,40}?)(?:\s{2,}|\n|$)",
             // From: X  To: Y
@@ -263,9 +265,10 @@ public class ReceiptParserService
 
     private static void ParseTrain(string text, string lower, ParsedReceiptData r)
     {
+        ParseTrainlineItemLine(text, r);
         TryExtractRoute(text, r);
 
-        if (lower.Contains("eurostar") || lower.Contains("paris") || lower.Contains("brussels") || lower.Contains("amsterdam"))
+        if (lower.Contains("eurostar"))
             r.TransportMode = "Train-International";
         else
             r.TransportMode ??= "Train-National";
@@ -335,12 +338,12 @@ public class ReceiptParserService
     {
         // Mon 25 June 2025 / Monday, 25 Jun 2025
         var m = Regex.Match(text,
-            @"(?i)(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s*(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{4})");
+            @"(?i)(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s*(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*,?\s+(\d{4})");
         if (TryBuildDate(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value, out var d1)) return d1;
 
-        // 25 June 2025
+        // 25 June 2025 / 1 Mar, 2026
         m = Regex.Match(text,
-            @"\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})\b",
+            @"\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*,?\s+(\d{4})(?=\d?\s*x\s*[aA]|\D|$)\b",
             RegexOptions.IgnoreCase);
         if (TryBuildDate(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value, out var d2)) return d2;
 
@@ -412,9 +415,104 @@ public class ReceiptParserService
 
     private static int? ExtractPassengers(string text)
     {
-        var m = Regex.Match(text, @"(\d+)\s*(?:adult|passenger|traveller|ticket)s?", RegexOptions.IgnoreCase);
+        var m = Regex.Match(text, @"(?<![0-9])(\d{1,2})\s*x\s*adults?", RegexOptions.IgnoreCase);
+        if (m.Success && int.TryParse(m.Groups[1].Value, out int px) && px is >= 1 and <= 50) return px;
+
+        m = Regex.Match(text, @"(\d+)\s*(?:adult|passenger|traveller|ticket)s?", RegexOptions.IgnoreCase);
         if (m.Success && int.TryParse(m.Groups[1].Value, out int p) && p is >= 1 and <= 50) return p;
         return null;
+    }
+
+    private static void ParseTrainlineItemLine(string text, ParsedReceiptData r)
+    {
+        const string datePart =
+            @"(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*,?\s*(\d{4})(?=\d?\s*x\s*[aA]|\D|$)";
+
+        var patterns = new[]
+        {
+            $@"(?i)(.+?)\s+rail\s+to\s+(.+?)\s*:\s*{datePart}",
+            $@"(?i)(.+?)\s+to\s+(.+?)\s*:\s*{datePart}",
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var m = Regex.Match(text, pattern);
+            if (!m.Success) continue;
+
+            var o = CleanLocation(m.Groups[1].Value);
+            var d = CleanLocation(m.Groups[2].Value);
+            if (IsPlausibleLocation(o)) r.Origin ??= o;
+            if (IsPlausibleLocation(d)) r.Destination ??= d;
+            if (TryBuildDate(m.Groups[3].Value, m.Groups[4].Value, m.Groups[5].Value, out var iso))
+                r.TripDate ??= iso;
+
+            var tail = text[(m.Index + m.Length)..];
+            var paxM = Regex.Match(tail, @"(?i)^(\d{1,2})\s*x\s*adults?");
+            if (paxM.Success && int.TryParse(paxM.Groups[1].Value, out int px) && px is >= 1 and <= 50)
+                r.Passengers ??= px;
+            return;
+        }
+    }
+
+    private static void ApplyFilenameHints(string? fileName, ParsedReceiptData r)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return;
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        stem = Regex.Replace(stem, @"\s*\(\d+\)$", "").Trim();
+        var lower = stem.ToLowerInvariant();
+
+        // tickets_for_L_Grieve___A_Wilczynski / hotel_for_Adam_Wilczynski
+        var forM = Regex.Match(stem, @"(?i)(?:hotel|tickets)_for_(.+?)(?:_re_trip_to_|_re_|_-_)");
+        if (forM.Success)
+        {
+            var raw = forM.Groups[1].Value.Replace("___", " & ").Replace('_', ' ');
+            r.TravellerName ??= ToTitleCase(Clean(raw));
+        }
+
+        // Heathrow_to_Paddington (skip for hotel receipts — "re_trip_to_Boston" is not a route)
+        if (!lower.Contains("hotel"))
+        {
+            var routeM = Regex.Match(stem, @"(?i)(?:^|_)([A-Za-z][A-Za-z_]{1,40}?)_to_([A-Za-z][A-Za-z_]{1,40}?)(?:_re_|_-_|_\d|$)");
+            if (routeM.Success)
+            {
+                r.Origin ??= ToTitleCase(routeM.Groups[1].Value.Replace('_', ' '));
+                r.Destination ??= ToTitleCase(routeM.Groups[2].Value.Replace('_', ' '));
+            }
+        }
+
+        // re_trip_to_Boston — destination only when no route was parsed above
+        var tripM = Regex.Match(stem, @"(?i)re_trip_to_([A-Za-z_]+)");
+        if (tripM.Success && r.Destination == null)
+            r.Destination ??= ToTitleCase(tripM.Groups[1].Value.Replace('_', ' '));
+
+        // 15-28_February_2026 (use check-in / start date)
+        var rangeM = Regex.Match(stem,
+            @"(?i)(\d{1,2})-(\d{1,2})_(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)_(\d{4})");
+        if (rangeM.Success && TryBuildDate(rangeM.Groups[1].Value, rangeM.Groups[3].Value, rangeM.Groups[4].Value, out var rangeStart))
+            r.TripDate ??= rangeStart;
+
+        // trailing _1_March_20 or _1_March_2026
+        var dateM = Regex.Match(stem,
+            @"(?i)_(\d{1,2})_(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)_(\d{2,4})$");
+        if (dateM.Success)
+        {
+            var year = dateM.Groups[3].Value;
+            if (year.Length == 2) year = "20" + year;
+            if (TryBuildDate(dateM.Groups[1].Value, dateM.Groups[2].Value, year, out var single))
+                r.TripDate ??= single;
+        }
+
+        if (lower.Contains("trainline") || lower.Contains("heathrow express") || lower.Contains("national rail"))
+            r.TransportMode ??= "Train-National";
+        if (lower.Contains("expedia") && lower.Contains("hotel"))
+        {
+            r.ExtractionNote = HasUsefulData(r)
+                ? "Hotel receipt (scanned PDF) — name and dates filled from filename. Enter transport mode and route manually."
+                : "Hotel receipt — scanned PDF with no readable text. Enter trip details manually.";
+        }
+        else if (HasUsefulData(r))
+            r.ExtractionNote = null;
     }
 
     private static int MonthNum(string s) => s.ToLowerInvariant() switch

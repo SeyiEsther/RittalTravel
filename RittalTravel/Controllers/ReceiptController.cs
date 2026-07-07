@@ -76,7 +76,7 @@ public class ReceiptController : Controller
 
             ParsedReceiptData parsed;
             await using (var parseStream = System.IO.File.OpenRead(filePath))
-                parsed = _parser.ParseFile(parseStream, ext);
+                parsed = _parser.ParseFile(parseStream, ext, file.FileName);
 
             var receipt = new Receipt
             {

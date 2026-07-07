@@ -49,7 +49,7 @@ public class TripController : Controller
 
             ParsedReceiptData parsed;
             await using (var parseStream = System.IO.File.OpenRead(filePath))
-                parsed = _parser.ParseFile(parseStream, ext);
+                parsed = _parser.ParseFile(parseStream, ext, receipt.FileName);
 
             _logger.LogInformation(
                 "ParseReceipt {File}: name={Name}, route={Origin}->{Dest}, date={Date}, mode={Mode}",
