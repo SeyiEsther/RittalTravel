@@ -251,6 +251,8 @@
 <script>
 const PARSE_RECEIPT_URL = '@Url.Action("ParseReceipt", "Trip")';
 
+function safeStr(v) { return (v == null ? '' : String(v)).trim(); }
+
 async function postFormWithAntiforgery(url, formData) {
     const token = document.querySelector('input[name="__RequestVerificationToken"]');
     if (token) {
@@ -336,6 +338,7 @@ function getRouteDistanceKm(from, to, mode) {
 }
 
 function splitMode(combined) {
+    if (!combined) return { mode: 'Train-National', travelClass: 'Economy' };
     for (const cls of ['Economy','Business','First','Standard','Premium']) {
         if (combined.endsWith('-' + cls))
             return { mode: combined.slice(0, -(cls.length + 1)), travelClass: cls };
@@ -569,8 +572,8 @@ async function updatePreview() {
         const { mode, travelClass } = splitMode(legModeValues[i] || 'Train-National');
         legPromises.push(
             getRouteDistanceKm(from, to, mode).then(dist => ({
-                fromLabel: stopValues[i].split(',')[0],
-                toLabel:   stopValues[i+1].split(',')[0],
+                fromLabel: safeStr(stopValues[i]).split(',')[0],
+                toLabel:   safeStr(stopValues[i+1]).split(',')[0],
                 from, to, dist, mode, travelClass,
                 kg: getFactor(mode, travelClass) * dist * pax
             }))
@@ -658,14 +661,21 @@ function toggleDiffReturn() {
 }
 
 function onFormSubmit(e) {
-    stopInputEls.forEach((inp, i) => { if (inp) stopValues[i] = inp.value.trim(); });
-    const filled = stopValues.filter(v => v.length > 0);
+    stopInputEls.forEach((inp, i) => { if (inp) stopValues[i] = safeStr(inp.value); });
+    const filled = stopValues.filter(v => safeStr(v).length > 0);
     if (filled.length < 2) {
         alert('Please enter at least an origin and a destination.');
         return false;
     }
-    const firstIdx = stopValues.findIndex(v => v.length > 0);
-    const lastIdx  = stopValues.length - 1 - [...stopValues].reverse().findIndex(v => v.length > 0);
+    const firstIdx = stopValues.findIndex(v => safeStr(v).length > 0);
+    let lastIdx = -1;
+    for (let i = stopValues.length - 1; i >= 0; i--) {
+        if (safeStr(stopValues[i]).length > 0) { lastIdx = i; break; }
+    }
+    if (firstIdx < 0 || lastIdx < 0) {
+        alert('Please enter at least an origin and a destination.');
+        return false;
+    }
     document.getElementById('fld-origin').value      = stopValues[firstIdx];
     document.getElementById('fld-destination').value = stopValues[lastIdx];
     const lastLegIdx = lastIdx - 1 < 0 ? 0 : lastIdx - 1;
@@ -676,7 +686,7 @@ function onFormSubmit(e) {
     container.innerHTML = '';
     let wpIdx = 0;
     for (let i = firstIdx + 1; i < lastIdx; i++) {
-        const loc = stopValues[i].trim();
+        const loc = safeStr(stopValues[i]);
         if (!loc) continue;
         const legIdx = i - 1;
         const { mode, travelClass } = splitMode(legModeValues[legIdx] || 'Train-National');
@@ -720,11 +730,18 @@ function pval(obj, key) {
     return null;
 }
 
+function safeStr(v) { return (v == null ? '' : String(v)).trim(); }
+
 function syncHiddenRouteFields() {
-    const firstIdx = stopValues.findIndex(v => v && v.trim().length > 0);
-    const lastIdx  = stopValues.length - 1 - [...stopValues].reverse().findIndex(v => v && v.trim().length > 0);
-    if (firstIdx >= 0) document.getElementById('fld-origin').value = stopValues[firstIdx].trim();
-    if (lastIdx >= 0)  document.getElementById('fld-destination').value = stopValues[lastIdx].trim();
+    let firstIdx = -1, lastIdx = -1;
+    for (let i = 0; i < stopValues.length; i++) {
+        if (safeStr(stopValues[i]).length > 0) {
+            if (firstIdx < 0) firstIdx = i;
+            lastIdx = i;
+        }
+    }
+    if (firstIdx >= 0) document.getElementById('fld-origin').value = safeStr(stopValues[firstIdx]);
+    if (lastIdx >= 0)  document.getElementById('fld-destination').value = safeStr(stopValues[lastIdx]);
 }
 
 function applyParsedMode(transportMode, travelClass) {
