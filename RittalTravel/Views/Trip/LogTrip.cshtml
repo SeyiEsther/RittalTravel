@@ -1,5 +1,8 @@
 @model RittalTravel.Models.Trip
 @inject Microsoft.Extensions.Configuration.IConfiguration _cfg
+@functions {
+    private static string JsArr(IEnumerable<string> items) => Newtonsoft.Json.JsonConvert.SerializeObject(items.ToList()).Replace("</", "<\\/");
+}
 @{
     ViewData["Title"] = "Log Trip";
     Layout = null;
@@ -7,6 +10,49 @@
     var defraYear     = _cfg["RittalTravel:DefraFactorYear"] ?? "DEFRA 2025";
     var defraRevStr   = _cfg["RittalTravel:DefraReviewDate"] ?? "";
     var showDefraBanner = DateTime.TryParse(defraRevStr, out var defraRevDate) && DateTime.Now >= defraRevDate;
+
+    // If this render is a redisplay after a failed submission, rebuild the route/traveller
+    // state from the posted model instead of leaving the JS defaults (which used to silently
+    // discard everything the user had typed).
+    bool isRepost = !string.IsNullOrWhiteSpace(Model.Origin) || !string.IsNullOrWhiteSpace(Model.Destination)
+                    || !string.IsNullOrWhiteSpace(Model.TravellerName);
+    var repostWaypoints = ViewBag.Waypoints as List<RittalTravel.Controllers.WaypointEntry>;
+
+    string CombineMode(string? mode, string? travelClass)
+        => string.IsNullOrWhiteSpace(mode) ? "Train-National"
+           : (mode.StartsWith("Flight") && !string.IsNullOrWhiteSpace(travelClass) ? mode + "-" + travelClass : mode);
+
+    var initStops  = new List<string>();
+    var initModes  = new List<string>();
+    var initTravellers = new List<string>();
+
+    if (isRepost)
+    {
+        initStops.Add(Model.Origin ?? "");
+        if (repostWaypoints != null)
+        {
+            foreach (var w in repostWaypoints)
+            {
+                if (string.IsNullOrWhiteSpace(w.Location)) continue;
+                initStops.Add(w.Location!);
+                initModes.Add(CombineMode(w.Mode, w.TravelClass));
+            }
+        }
+        initStops.Add(Model.Destination ?? "");
+        initModes.Add(CombineMode(Model.TransportMode, Model.TravelClass));
+
+        if (!string.IsNullOrWhiteSpace(Model.TravellerName))
+            initTravellers = System.Text.RegularExpressions.Regex
+                .Split(Model.TravellerName, @"\s*(?:&|\+|,|\band\b)\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+    }
+
+    bool initReturnTrip        = ViewBag.ReturnTrip as bool? ?? false;
+    bool initDifferentReturn   = ViewBag.DifferentReturn as bool? ?? false;
+    string initReturnOrigin      = ViewBag.ReturnOrigin as string ?? "";
+    string initReturnDestination = ViewBag.ReturnDestination as string ?? "";
+    bool initAccountForDetours = ViewBag.AccountForDetours as bool? ?? false;
+    string initReceiptFileName = ViewBag.ReceiptFileName as string ?? "";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -73,7 +119,7 @@
         <input type="hidden" asp-for="Destination"   id="fld-destination" />
         <input type="hidden" asp-for="TransportMode" id="fld-mode" />
         <input type="hidden" asp-for="TravelClass"   id="fld-class" />
-        <input type="hidden" name="receiptFileName"  id="fld-receipt" />
+        <input type="hidden" name="receiptFileName"  id="fld-receipt" value="@initReceiptFileName" />
         <!-- Waypoint hidden inputs injected here on submit -->
         <div id="waypoints-container"></div>
 
@@ -162,7 +208,7 @@
                     <div class="lt-toggle-row">
                         <span class="lt-toggle-label">Account for Active Road Closures &amp; Major Congestion Detours</span>
                         <label class="lt-toggle-sw">
-                            <input type="checkbox" name="accountForDetours" value="true" id="chk-detours" />
+                            <input type="checkbox" name="accountForDetours" value="true" id="chk-detours" checked="@initAccountForDetours" />
                             <div class="lt-toggle-track"><div class="lt-toggle-thumb"></div></div>
                         </label>
                     </div>
@@ -177,27 +223,27 @@
                     <div class="lt-toggle-row">
                         <span class="lt-toggle-label">Include return leg</span>
                         <label class="lt-toggle-sw">
-                            <input type="checkbox" name="returnTrip" value="true" id="chk-return" onchange="toggleReturn()" />
+                            <input type="checkbox" name="returnTrip" value="true" id="chk-return" onchange="toggleReturn()" checked="@initReturnTrip" />
                             <div class="lt-toggle-track"><div class="lt-toggle-thumb"></div></div>
                         </label>
                     </div>
-                    <div id="return-extra" style="display:none">
+                    <div id="return-extra" style="display:@(initReturnTrip ? "block" : "none")">
                         <div style="margin-top:.875rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem">
                             <span style="font-size:.8125rem;color:var(--txm)">Return route differs from outbound</span>
                             <label class="lt-toggle-sw">
-                                <input type="checkbox" name="differentReturn" value="true" id="chk-diff-return" onchange="toggleDiffReturn()" />
+                                <input type="checkbox" name="differentReturn" value="true" id="chk-diff-return" onchange="toggleDiffReturn()" checked="@initDifferentReturn" />
                                 <div class="lt-toggle-track"><div class="lt-toggle-thumb"></div></div>
                             </label>
                         </div>
-                        <div id="return-fields" style="display:none;margin-top:.875rem">
+                        <div id="return-fields" style="display:@(initDifferentReturn ? "block" : "none");margin-top:.875rem">
                             <div class="lt-grid-2">
                                 <div class="lt-field">
                                     <label>Return Origin <span class="lt-optional">(blank = reverse outbound)</span></label>
-                                    <input type="text" name="returnOrigin" class="lt-input" placeholder="Leave blank to reverse" autocomplete="off" />
+                                    <input type="text" name="returnOrigin" class="lt-input" placeholder="Leave blank to reverse" autocomplete="off" value="@initReturnOrigin" />
                                 </div>
                                 <div class="lt-field">
                                     <label>Return Destination <span class="lt-optional">(blank = reverse outbound)</span></label>
-                                    <input type="text" name="returnDestination" class="lt-input" placeholder="Leave blank to reverse" autocomplete="off" />
+                                    <input type="text" name="returnDestination" class="lt-input" placeholder="Leave blank to reverse" autocomplete="off" value="@initReturnDestination" />
                                 </div>
                             </div>
                         </div>
@@ -359,11 +405,11 @@ function splitMode(combined) {
     return { mode: combined, travelClass: 'Economy' };
 }
 
-let stopValues       = ['', ''];
-let stopPlaces       = [null, null];
-let legModeValues    = ['Train-National'];
+let stopValues       = @Html.Raw(isRepost ? JsArr(initStops) : "['', '']");
+let stopPlaces       = stopValues.map(() => null);
+let legModeValues    = @Html.Raw(isRepost && initModes.Count > 0 ? JsArr(initModes) : "['Train-National']");
 let stopInputEls     = [];
-let travellerNames   = [''];
+let travellerNames   = @Html.Raw(isRepost && initTravellers.Count > 0 ? JsArr(initTravellers) : "['']");
 let mapsReady        = false;
 let mapInstance      = null;
 let mapMarkers       = [];

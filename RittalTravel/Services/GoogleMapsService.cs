@@ -182,6 +182,10 @@ public class GoogleMapsService
         return new[] { loc.GetProperty("lat").GetDouble(), loc.GetProperty("lng").GetDouble() };
     }
 
+    // Returns 0 (not a guessed distance) when either city cannot be resolved, so callers
+    // treat it as a failed calculation instead of silently recording a wrong distance —
+    // this used to default an unrecognised city to London's coordinates, which could
+    // produce a plausible-looking but incorrect emissions figure for an audit report.
     private static double FallbackHaversine(string origin, string destination)
     {
         var coords = new Dictionary<string, double[]>(StringComparer.OrdinalIgnoreCase)
@@ -195,8 +199,9 @@ public class GoogleMapsService
             { "Amsterdam", new[]{52.3676, 4.9041}   }, { "Berlin",     new[]{52.5200,13.4050} },
             { "Dublin",    new[]{53.3498,-6.2603}   },
         };
-        double[] orig = FindCity(origin, coords) ?? new[]{51.5,-0.1};
-        double[] dest = FindCity(destination, coords) ?? new[]{51.5,-0.1};
+        double[]? orig = FindCity(origin, coords);
+        double[]? dest = FindCity(destination, coords);
+        if (orig == null || dest == null) return 0;
         return DefraCalculator.HaversineDistance(orig[0], orig[1], dest[0], dest[1]);
     }
 

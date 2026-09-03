@@ -148,6 +148,16 @@ public class TripController : Controller
         string? returnOrigin = null, string? returnDestination = null,
         bool accountForDetours = false, string? receiptFileName = null)
     {
+        // Echoed back to the view so a validation failure (or a distance-lookup failure)
+        // can redraw the route/traveller UI instead of discarding everything the user typed.
+        ViewBag.Waypoints         = waypoints;
+        ViewBag.ReturnTrip        = returnTrip;
+        ViewBag.DifferentReturn   = differentReturn;
+        ViewBag.ReturnOrigin      = returnOrigin;
+        ViewBag.ReturnDestination = returnDestination;
+        ViewBag.AccountForDetours = accountForDetours;
+        ViewBag.ReceiptFileName   = receiptFileName;
+
         foreach (var f in new[] { nameof(Trip.DistanceKm), nameof(Trip.EmissionFactor), nameof(Trip.KgCO2e),
             nameof(Trip.Formula), nameof(Trip.DistanceMethodology), nameof(Trip.DefraFactorYear),
             nameof(Trip.OrganisationId), nameof(Trip.Organisation), nameof(Trip.CreatedAt), nameof(Trip.LoggedBy),
@@ -162,6 +172,7 @@ public class TripController : Controller
         {
             double totalDist = 0, totalKg = 0, maxLegDist = 0;
             string dominantMode = trip.TransportMode;
+            string dominantClass = trip.TravelClass;
             var formulaParts = new List<string>();
 
             if (legs != null && legs.Count > 0)
@@ -179,7 +190,7 @@ public class TripController : Controller
                     double legKg = DefraCalculator.CalculateKgCO2e(legDist, legFactor, trip.Passengers);
                     totalDist += legDist; totalKg += legKg;
                     formulaParts.Add($"Leg {i + 1} ({modes[i]}): {DefraCalculator.GetFormula(modes[i], classes[i], legDist, legFactor, trip.Passengers, legKg)}");
-                    if (legDist > maxLegDist) { maxLegDist = legDist; dominantMode = modes[i]; }
+                    if (legDist > maxLegDist) { maxLegDist = legDist; dominantMode = modes[i]; dominantClass = classes[i]; }
                 }
                 trip.Waypoints = JsonConvert.SerializeObject(legs);
             }
@@ -227,11 +238,12 @@ public class TripController : Controller
             }
 
             trip.DistanceKm          = Math.Round(totalDist, 2);
-            trip.EmissionFactor      = DefraCalculator.GetEmissionFactor(dominantMode, trip.TravelClass);
+            trip.EmissionFactor      = DefraCalculator.GetEmissionFactor(dominantMode, dominantClass);
             trip.KgCO2e              = Math.Round(totalKg, 3);
             trip.Formula             = string.Join(" | ", formulaParts);
             trip.DistanceMethodology = DefraCalculator.GetDistanceMethodology(dominantMode);
             trip.TransportMode       = dominantMode;
+            trip.TravelClass         = dominantClass;
             trip.DefraFactorYear     = _options.DefraFactorYear;
             trip.OrganisationId      = _options.OrganisationId;
             trip.LoggedBy            = User.Identity?.Name ?? "";

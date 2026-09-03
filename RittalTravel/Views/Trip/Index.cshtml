@@ -57,7 +57,7 @@
                 </td>
                 <td>
                     <form asp-action="Delete" asp-route-id="@trip.Id" method="post"
-                          onsubmit="return confirm('Delete trip for @Html.Raw(trip.TravellerName.Replace("'","\\'"))? This cannot be undone.')">
+                          class="rt-delete-form" data-confirm-message="Delete trip for @trip.TravellerName? This cannot be undone.">
                         @Html.AntiForgeryToken()
                         <button type="submit" class="rt-btn rt-btn-danger rt-btn-sm">Delete</button>
                     </form>
@@ -73,3 +73,13 @@
     </div>
 }
 </div>
+
+@section Scripts {
+<script>
+document.querySelectorAll('.rt-delete-form').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+        if (!confirm(f.dataset.confirmMessage || 'Delete this item? This cannot be undone.')) e.preventDefault();
+    });
+});
+</script>
+}

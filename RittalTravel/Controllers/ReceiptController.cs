@@ -26,24 +26,34 @@ public class ReceiptController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(string? search)
     {
-        var query = _db.Receipts.Where(r => r.OrganisationId == _options.OrganisationId).AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(search))
+        try
         {
-            var s = search.Trim().ToLower();
-            query = query.Where(r =>
-                (r.TravellerName != null && r.TravellerName.ToLower().Contains(s)) ||
-                (r.Origin != null && r.Origin.ToLower().Contains(s)) ||
-                (r.Destination != null && r.Destination.ToLower().Contains(s)) ||
-                (r.OriginalFileName.ToLower().Contains(s)) ||
-                (r.TransportMode != null && r.TransportMode.ToLower().Contains(s)) ||
-                (r.DocumentType != null && r.DocumentType.ToLower().Contains(s)) ||
-                (r.Notes != null && r.Notes.ToLower().Contains(s)));
-        }
+            var query = _db.Receipts.Where(r => r.OrganisationId == _options.OrganisationId).AsQueryable();
 
-        var receipts = await query.OrderByDescending(r => r.UploadedAt).ToListAsync();
-        ViewBag.Search = search ?? "";
-        return View(receipts);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(r =>
+                    (r.TravellerName != null && r.TravellerName.ToLower().Contains(s)) ||
+                    (r.Origin != null && r.Origin.ToLower().Contains(s)) ||
+                    (r.Destination != null && r.Destination.ToLower().Contains(s)) ||
+                    (r.OriginalFileName.ToLower().Contains(s)) ||
+                    (r.TransportMode != null && r.TransportMode.ToLower().Contains(s)) ||
+                    (r.DocumentType != null && r.DocumentType.ToLower().Contains(s)) ||
+                    (r.Notes != null && r.Notes.ToLower().Contains(s)));
+            }
+
+            var receipts = await query.OrderByDescending(r => r.UploadedAt).ToListAsync();
+            ViewBag.Search = search ?? "";
+            return View(receipts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Receipt library load failed");
+            TempData["Error"] = "Could not load the receipt library. Please try again.";
+            ViewBag.Search = search ?? "";
+            return View(new List<Receipt>());
+        }
     }
 
     [HttpPost]
